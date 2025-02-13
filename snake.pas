@@ -2,7 +2,7 @@
 {$COPERATORS ON}
 
 
-uses crt, sysutils {$ifdef unix},cthreads{$endif};
+uses {$ifdef unix}cthreads,{$endif}crt, sysutils;
 
 
 const
@@ -210,7 +210,7 @@ begin
   ClrScr();
   CursorOff();
 
-  wnd.width  := 60;
+  wnd.width  := 50;
   wnd.height := 22;
   windowDraw(wnd);
   
