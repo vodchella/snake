@@ -8,16 +8,19 @@ procedure Snake is
    use Interfaces.C;
    use Ada.Strings.Fixed;
 
-   type Snake_Direction is (Up, Right, Down, Left);
-   type Snake_Head is array (Snake_Direction) of Character;
    type Point is record
-      X, Y : Natural;
+      X, Y : Integer;
    end record;
+
+   type Snake_Direction is (Up, Right, Down, Left);
+   Disallowed_Dirs : constant array (Snake_Direction) of Snake_Direction := (Down, Left, Up, Right);
+   Moves : constant array (Snake_Direction) of Point := ((0, -1), (1, 0), (0, 1), (-1, 0));
+   Head_Chars : constant array (Snake_Direction) of Character := ('^', '>', 'v', '<');
+
    type Snake_Body is array (1 .. 8) of Point;
    type Snake_Type is record
       Figure : Snake_Body;
       Dir : Snake_Direction := Up;
-      To_Erase : Point;
    end record;
 
    type Bitwise_Int is mod 2**32;
@@ -29,11 +32,31 @@ procedure Snake is
       ISpeed, OSpeed : CInt;
    end record;
    pragma Convention (C, Termios);
+
+   protected Exit_Flag is
+      procedure Set (Value : Boolean);
+      function Get return Boolean;
+   private
+      Flag : Boolean := False;
+   end Exit_Flag;
+
+   protected body Exit_Flag is
+      procedure Set (Value : Boolean) is
+      begin
+         Flag := Value;
+      end;
+
+      function Get return Boolean is
+      begin
+	 return Flag;
+      end;
+   end Exit_Flag;
    
    SCR_WIDTH  : constant Natural := 50;
    SCR_HEIGHT : constant Natural := 15;
    ICANON     : constant Bitwise_Int := Bitwise_Int(16#0002#);
    ECHO       : constant Bitwise_Int := Bitwise_Int(16#0008#);
+
 
 
 
@@ -65,14 +88,30 @@ procedure Snake is
    function Trim_Integer_Image (N : Integer) return String is
       Str : constant String := Integer'Image(N);
    begin
-      return Trim(Str, Ada.Strings.Left);
+      return Trim (Str, Ada.Strings.Left);
    end Trim_Integer_Image;
-
 
    procedure Move_Cursor (X, Y : Integer) is
    begin
       Put (ASCII.ESC & "[" & Trim_Integer_Image(Y + 1) & ";" & Trim_Integer_Image(X + 1) & "H");
    end Move_Cursor;
+
+   procedure Hide_Cursor is
+   begin
+      Put (ASCII.ESC & "[?25l");
+   end Hide_Cursor;
+
+   procedure Show_Cursor is
+   begin
+      Put (ASCII.ESC & "[?25h");
+   end Show_Cursor;
+
+   procedure Write_Char (C : Character; X, Y : Natural) is
+   begin
+      Move_Cursor (X, Y);
+      Put (C);
+      Hide_Cursor;
+   end Write_Char;
 
 
    Old_Termios, New_Termios : aliased Termios;
@@ -102,15 +141,6 @@ procedure Snake is
       end if;
    end Restore_Term;
 
-   procedure Hide_Cursor is
-   begin
-      Put (ASCII.ESC & "[?25l");
-   end Hide_Cursor;
-
-   procedure Show_Cursor is
-   begin
-      Put (ASCII.ESC & "[?25h");
-   end Show_Cursor;
 
 
    task Snake_Worker is
@@ -120,16 +150,66 @@ procedure Snake is
 
    task body Snake_Worker is
       Running : Boolean := True;
+      Failed : Boolean := False;
       Snake : Snake_Type;
-      Head_Chars : Snake_Head := ('^', '>', 'v', '<');
-      Head : Point renames Snake.Figure(1);
+      Head : Point renames Snake.Figure(Snake.Figure'First);
+      Tail : Point renames Snake.Figure(Snake.Figure'Last);
+
+      procedure Move_And_Draw_Snake is
+         Move : Point;
+      begin
+	 Write_Char (' ', Tail.X, Tail.Y);
+         for I in reverse Snake.Figure'First + 1 .. Snake.Figure'Last loop
+	    Snake.Figure(I).X := Snake.Figure(I - 1).X;
+	    Snake.Figure(I).Y := Snake.Figure(I - 1).Y;
+	    Write_Char ('*', Snake.Figure(I).X, Snake.Figure(I).Y);
+         end loop;
+
+	 Move := Moves(Snake.Dir);
+	 Head.X := Head.X + Move.X;
+	 Head.Y := Head.Y + Move.Y;
+
+         Write_Char (Head_Chars(Snake.Dir), Head.X, Head.Y);
+      end;
+
+      procedure Init_Snake is
+      begin
+         Head.X := Integer(SCR_WIDTH / 2);
+         Head.Y := Integer(SCR_HEIGHT / 2) - 1;
+         Write_Char (Head_Chars(Snake.Dir), Head.X, Head.Y);
+         for I in Snake.Figure'First + 1 .. Snake.Figure'Last loop
+	    Snake.Figure(I).X := Head.X;
+	    Snake.Figure(I).Y := Snake.Figure(I - 1).Y + 1;
+         end loop;
+      end;
+
+      function Snake_Has_Collisions return Boolean is
+      begin
+	 if (Head.X in 0 | (SCR_WIDTH - 1)) or (Head.Y in 0 | (SCR_HEIGHT - 1)) then
+	    return True;
+	 end if;
+         for I in Snake.Figure'First + 1 .. Snake.Figure'Last loop
+	    if (Snake.Figure(I).X = Head.X) and (Snake.Figure(I).Y = Head.Y) then
+               return True;
+	    end if;
+         end loop;
+	 return False;
+      end;
+
+      procedure Game_Over is
+      begin
+	 Move_Cursor (Integer(SCR_WIDTH / 2) - 5, Integer(SCR_HEIGHT / 2));
+	 Put_Line ("Game over!");
+	 Running := False;
+	 Exit_Flag.Set (True);
+      end;
+
+
    begin
       Clear_Screen;
       Draw_Border;
       Setup_Term;
-
-      Head.X := Integer(SCR_WIDTH / 2);
-      Head.Y := Integer(SCR_HEIGHT / 2);
+      Init_Snake;
 
       while Running loop
 	 select
@@ -138,26 +218,33 @@ procedure Snake is
 	    end Stop;
 	 or
             accept Set_Dir (Dir : in Snake_Direction) do
-               Snake.Dir := Dir;
+	       if (Dir /= Disallowed_Dirs(Snake.Dir)) then
+                  Snake.Dir := Dir;
+	       end if;
 	    end Set_Dir;
 	 or
-            delay 0.1;
+            delay 0.01;
          end select;
 
-         Move_Cursor (Head.X, Head.Y);
-         Put (Head_Chars(Snake.Dir));
-	 Hide_Cursor;
+         Move_And_Draw_Snake;
+	 Failed := Snake_Has_Collisions;
+	 if Failed then
+	    Game_Over;
+	 end if;
+	 delay 0.5;
 
       end loop;
       
       Restore_Term;
       Clear_Screen;
       Show_Cursor;
+      if Failed then
+         Put_Line ("Press ENTER to exit");
+      end if;
    end Snake_Worker;
 
 
    Key, Key2 : Character;
-   Exit_Flag : Boolean := False;
 
 begin
    loop
@@ -173,14 +260,18 @@ begin
                when 'D' => Snake_Worker.Set_Dir(Left);
                when others => null;
             end case;
-         else
-            Exit_Flag := True;
+         -- else
+            -- Exit_Flag.Set (True);
          end if;
       end if;
 
-      exit when Exit_Flag;
+      exit when Exit_Flag.Get;
    end loop;
 
-   Snake_Worker.Stop;
+   begin
+      Snake_Worker.Stop;
+   exception
+      when others => null;
+   end;
 
 end Snake;
