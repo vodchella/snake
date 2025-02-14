@@ -13,18 +13,29 @@ procedure Snake is
    type Move_Rule is record
       X, Y : Move_Offset;
    end record;
-   type Window_Width_Dim  is range 0 .. WND_WIDTH - 1;
-   type Window_Height_Dim is range 0 .. WND_HEIGHT - 1;
-   type Point is record
-      X : Window_Width_Dim;
-      Y : Window_Height_Dim;
-   end record;
-
    type Snake_Direction is (Up, Right, Down, Left);
    Disallowed_Dirs : constant array (Snake_Direction) of Snake_Direction := (Down, Left, Up, Right);
    Moves : constant array (Snake_Direction) of Move_Rule := ((0, -1), (1, 0), (0, 1), (-1, 0));
    Head_Chars : constant array (Snake_Direction) of Character := ('^', '>', 'v', '<');
+   type Window_Width_Dim  is mod WND_WIDTH;
+   type Window_Height_Dim is mod WND_HEIGHT;
 
+   WND_WIDTH_MIDDLE  : constant Window_Width_Dim  := Window_Width_Dim(WND_WIDTH / 2);
+   WND_HEIGHT_MIDDLE : constant Window_Height_Dim := Window_Height_Dim(WND_HEIGHT / 2);
+
+
+   function "+" (Left : Window_Width_Dim; Right : Move_Offset) return Window_Width_Dim is
+      (Window_Width_Dim(Integer(Left) + Integer(Right)));
+
+   function "+" (Left : Window_Height_Dim; Right : Move_Offset) return Window_Height_Dim is
+      (Window_Height_Dim(Integer(Left) + Integer(Right)));
+
+
+
+   type Point is record
+      X : Window_Width_Dim;
+      Y : Window_Height_Dim;
+   end record;
    type Snake_Body is array (1 .. 8) of Point;
    type Snake_Type is record
       Figure : Snake_Body;
@@ -33,13 +44,17 @@ procedure Snake is
 
    type Bitwise_Int is mod 2**32;
    subtype CInt is Interfaces.C.Int;
-
    type Termios is record
       IFlag, OFlag, CFlag, LFlag : CInt;
       CC : String (1 .. 32);
       ISpeed, OSpeed : CInt;
    end record;
    pragma Convention (C, Termios);
+
+   ICANON     : constant Bitwise_Int := Bitwise_Int(16#0002#);
+   ECHO       : constant Bitwise_Int := Bitwise_Int(16#0008#);
+
+
 
    protected Exit_Flag is
       procedure Set (Value : Boolean);
@@ -57,9 +72,6 @@ procedure Snake is
       function Get return Boolean is (Flag);
    end Exit_Flag;
    
-   ICANON     : constant Bitwise_Int := Bitwise_Int(16#0002#);
-   ECHO       : constant Bitwise_Int := Bitwise_Int(16#0008#);
-
 
 
 
@@ -120,6 +132,7 @@ procedure Snake is
    end Write_Char;
 
 
+
    Old_Termios, New_Termios : aliased Termios;
    procedure Setup_Term is
    begin
@@ -172,25 +185,25 @@ procedure Snake is
          end loop;
 
 	 Move := Moves(Snake.Dir);
-	 Head.X := Window_Width_Dim(Integer(Head.X) + Integer(Move.X));
-	 Head.Y := Window_Height_Dim(Integer(Head.Y) + Integer(Move.Y));
+	 Head.X := Head.X + Move.X;
+	 Head.Y := Head.Y + Move.Y;
 
          Write_Char (Head_Chars(Snake.Dir), Head.X, Head.Y);
       end;
 
       procedure Init_Snake is
       begin
-         Head.X := Window_Width_Dim(WND_WIDTH / 2);
-         Head.Y := Window_Height_Dim(WND_HEIGHT / 2) - 1;
+         Head.X := WND_WIDTH_MIDDLE;
+         Head.Y := WND_HEIGHT_MIDDLE + Move_Offset(-1);
          for I in Snake.Figure'First + 1 .. Snake.Figure'Last loop
 	    Snake.Figure(I).X := Head.X;
-	    Snake.Figure(I).Y := Snake.Figure(I - 1).Y + 1;
+	    Snake.Figure(I).Y := Snake.Figure(I - 1).Y + Move_Offset(1);
          end loop;
       end;
 
       function Snake_Has_Collisions return Boolean is
       begin
-	 if (Head.X in Window_Width_Dim(0) | Window_Width_Dim(WND_WIDTH - 1)) or (Head.Y in Window_Height_Dim(0) | Window_Height_Dim(WND_HEIGHT - 1)) then
+	 if (Head.X in Window_Width_Dim'First | Window_Width_Dim'Last) or (Head.Y in Window_Height_Dim'First | Window_Height_Dim'Last) then
 	    return True;
 	 end if;
          for I in Snake.Figure'First + 4 .. Snake.Figure'Last loop
@@ -203,7 +216,7 @@ procedure Snake is
 
       procedure Game_Over is
       begin
-	 Move_Cursor (Window_Width_Dim(WND_WIDTH / 2 - 5), Window_Height_Dim(WND_HEIGHT / 2));
+	 Move_Cursor (WND_WIDTH_MIDDLE - Window_Width_Dim(5), WND_HEIGHT_MIDDLE);
 	 Put_Line ("Game over!");
 	 Running := False;
 	 Exit_Flag.Set (True);
