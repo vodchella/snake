@@ -26,7 +26,6 @@ procedure Snake is
 
    function "+" (Left : Window_Width_Dim; Right : Move_Offset) return Window_Width_Dim is
       (Window_Width_Dim(Integer(Left) + Integer(Right)));
-
    function "+" (Left : Window_Height_Dim; Right : Move_Offset) return Window_Height_Dim is
       (Window_Height_Dim(Integer(Left) + Integer(Right)));
 
@@ -36,7 +35,8 @@ procedure Snake is
       X : Window_Width_Dim;
       Y : Window_Height_Dim;
    end record;
-   type Snake_Body is array (1 .. 8) of Point;
+   type Snake_Body_Index is range 1 .. 8;
+   type Snake_Body is array (Snake_Body_Index) of Point;
    type Snake_Type is record
       Figure : Snake_Body;
       Dir    : Snake_Direction := Up;
@@ -74,13 +74,10 @@ procedure Snake is
    
 
 
-
    function Tcgetattr (Fd : Integer; T : access Termios) return Integer
       with Import => True, Convention => C, External_Name => "tcgetattr";
-
    function Tcsetattr (Fd, OptionalActions : Integer; T : access Termios) return Integer
       with Import => True, Convention => C, External_Name => "tcsetattr";
-
    function Get_Char return Character
       with Import => True, Convention => C, External_Name => "getchar";
 
@@ -177,16 +174,16 @@ procedure Snake is
       procedure Move_And_Draw_Snake is
          Move : Move_Rule;
       begin
-	 Write_Char (' ', Tail.X, Tail.Y);
+         Write_Char (' ', Tail.X, Tail.Y);
          for I in reverse Snake.Figure'First + 1 .. Snake.Figure'Last loop
-	    Snake.Figure(I).X := Snake.Figure(I - 1).X;
-	    Snake.Figure(I).Y := Snake.Figure(I - 1).Y;
-	    Write_Char ('*', Snake.Figure(I).X, Snake.Figure(I).Y);
+            Snake.Figure(I).X := Snake.Figure(I - 1).X;
+            Snake.Figure(I).Y := Snake.Figure(I - 1).Y;
+            Write_Char ('*', Snake.Figure(I).X, Snake.Figure(I).Y);
          end loop;
 
-	 Move := Moves(Snake.Dir);
-	 Head.X := Head.X + Move.X;
-	 Head.Y := Head.Y + Move.Y;
+         Move := Moves(Snake.Dir);
+         Head.X := Head.X + Move.X;
+         Head.Y := Head.Y + Move.Y;
 
          Write_Char (Head_Chars(Snake.Dir), Head.X, Head.Y);
       end;
@@ -196,30 +193,30 @@ procedure Snake is
          Head.X := WND_WIDTH_MIDDLE;
          Head.Y := WND_HEIGHT_MIDDLE + Move_Offset(-1);
          for I in Snake.Figure'First + 1 .. Snake.Figure'Last loop
-	    Snake.Figure(I).X := Head.X;
-	    Snake.Figure(I).Y := Snake.Figure(I - 1).Y + Move_Offset(1);
+            Snake.Figure(I).X := Head.X;
+            Snake.Figure(I).Y := Snake.Figure(I - 1).Y + Move_Offset(1);
          end loop;
       end;
 
       function Snake_Has_Collisions return Boolean is
       begin
-	 if (Head.X in Window_Width_Dim'First | Window_Width_Dim'Last) or (Head.Y in Window_Height_Dim'First | Window_Height_Dim'Last) then
-	    return True;
-	 end if;
+         if (Head.X in Window_Width_Dim'First | Window_Width_Dim'Last) or (Head.Y in Window_Height_Dim'First | Window_Height_Dim'Last) then
+            return True;
+         end if;
          for I in Snake.Figure'First + 4 .. Snake.Figure'Last loop
-	    if (Snake.Figure(I).X = Head.X) and (Snake.Figure(I).Y = Head.Y) then
+            if (Snake.Figure(I).X = Head.X) and (Snake.Figure(I).Y = Head.Y) then
                return True;
-	    end if;
+            end if;
          end loop;
-	 return False;
+         return False;
       end;
 
       procedure Game_Over is
       begin
-	 Move_Cursor (WND_WIDTH_MIDDLE - Window_Width_Dim(5), WND_HEIGHT_MIDDLE);
-	 Put_Line ("Game over!");
-	 Running := False;
-	 Exit_Flag.Set (True);
+         Move_Cursor (WND_WIDTH_MIDDLE - Window_Width_Dim(5), WND_HEIGHT_MIDDLE);
+         Put_Line ("Game over!");
+         Running := False;
+         Exit_Flag.Set (True);
       end;
 
 
@@ -230,26 +227,26 @@ procedure Snake is
       Init_Snake;
 
       while Running loop
-	 select
-	    accept Stop do
-	       Running := False;
-	    end Stop;
-	 or
+         select
+            accept Stop do
+               Running := False;
+            end Stop;
+         or
             accept Set_Dir (Dir : in Snake_Direction) do
-	       if (Dir /= Disallowed_Dirs(Snake.Dir)) then
+               if (Dir /= Disallowed_Dirs(Snake.Dir)) then
                   Snake.Dir := Dir;
-	       end if;
-	    end Set_Dir;
-	 or
+               end if;
+            end Set_Dir;
+         or
             delay 0.01;
          end select;
 
          Move_And_Draw_Snake;
-	 Failed := Snake_Has_Collisions;
-	 if Failed then
-	    Game_Over;
-	 end if;
-	 delay 0.5;
+         Failed := Snake_Has_Collisions;
+         if Failed then
+            Game_Over;
+         end if;
+         delay 0.5;
 
       end loop;
       
