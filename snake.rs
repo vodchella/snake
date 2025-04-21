@@ -1,8 +1,12 @@
 /*
- *  Для сборки c помощью rustc:
+ *  Для сборки предварительно необходимо:
  *    - Инициализировать фейковый проект: cargo init --bin .
+ *    - Откатить изменения в .gitignore
  *    - В Cargo.toml в раздел dependencies прописать: libc = "0.2"
  *    - Собрать проект: cargo build --release
+ *  Для сборки и запуска с помощью cargo:
+ *    - Выполнить: cargo run
+ *  Для сборки и запуска с помощью rustc:
  *    - В переменную окружения поместить путь к libc rlib: libc_rlib=$(ls target/release/deps/liblibc-*.rlib)
  *    - Запустить сборку: rustc snake.rs -L dependency=target/release/deps --extern libc=$libc_rlib
  */
