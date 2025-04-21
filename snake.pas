@@ -210,7 +210,7 @@ begin
   ClrScr();
   CursorOff();
 
-  wnd.width  := 50;
+  wnd.width  := 46;
   wnd.height := 22;
   windowDraw(wnd);
   

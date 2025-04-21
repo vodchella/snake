@@ -6,7 +6,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 
 procedure Snake is
 
-   WND_WIDTH  : constant Positive := 50;
+   WND_WIDTH  : constant Positive := 46;
    WND_HEIGHT : constant Positive := 15;
 
    type Move_Offset is range -1 .. 1;

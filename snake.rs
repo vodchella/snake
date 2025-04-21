@@ -18,7 +18,7 @@ use libc::{termios, tcgetattr, tcsetattr, TCSANOW, ECHO, ICANON};
 
 const ESC:        u8 = 0x1B;
 const ASCII_ESC:  &str = "\x1B";
-const WND_WIDTH:  i8 = 50;
+const WND_WIDTH:  i8 = 46;
 const WND_HEIGHT: i8 = 15;
 const WND_WIDTH_MIDDLE:  i8 = WND_WIDTH/ 2;
 const WND_HEIGHT_MIDDLE: i8 = WND_HEIGHT/ 2;
