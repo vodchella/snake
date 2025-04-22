@@ -16,7 +16,7 @@ extern crate libc;
 use std::io::{self, Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::process;
-use libc::{termios, tcgetattr, tcsetattr, TCSANOW, ECHO, ICANON, sigaction, sighandler_t, SIGINT};
+use libc::{termios, tcgetattr, tcsetattr, TCSANOW, ECHO, ICANON, sigaction, sighandler_t, SIGINT, SIGTERM, SIGQUIT, SIGTSTP};
 
 
 const ESC:        u8 = 0x1B;
@@ -31,15 +31,15 @@ extern "C" fn handle_sigint(_: i32) {
     // We just need empty handler
 }
 
-fn setup_sigint_handler() {
+fn setup_signal_handlers() {
     unsafe {
         let mut action: sigaction = std::mem::zeroed();
         action.sa_sigaction = handle_sigint as sighandler_t;
         action.sa_flags = 0; // Without SA_RESTART!
-
         libc::sigemptyset(&mut action.sa_mask);
-        if libc::sigaction(SIGINT, &action, std::ptr::null_mut()) != 0 {
-            panic!("Не удалось установить sigaction");
+
+        for &sig in &[SIGINT, SIGTERM, SIGQUIT, SIGTSTP] {
+            libc::sigaction(sig, &action, std::ptr::null_mut());
         }
     }
 }
@@ -110,7 +110,7 @@ fn main() {
     let fd = stdin.as_raw_fd();
     let mut orig_termios: termios = unsafe { std::mem::zeroed() };
 
-    setup_sigint_handler();
+    setup_signal_handlers();
     set_raw_mode(fd, &mut orig_termios);
     clear_screen();
     draw_borders();
