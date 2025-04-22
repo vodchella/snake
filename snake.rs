@@ -27,14 +27,14 @@ const WND_WIDTH_MIDDLE:  i8 = WND_WIDTH / 2;
 const WND_HEIGHT_MIDDLE: i8 = WND_HEIGHT / 2;
 
 
-extern "C" fn handle_sigint(_: i32) {
+extern "C" fn handle_signal(_: i32) {
     // We just need empty handler
 }
 
 fn setup_signal_handlers() {
     unsafe {
         let mut action: sigaction = std::mem::zeroed();
-        action.sa_sigaction = handle_sigint as sighandler_t;
+        action.sa_sigaction = handle_signal as sighandler_t;
         action.sa_flags = 0; // Without SA_RESTART!
         libc::sigemptyset(&mut action.sa_mask);
 
