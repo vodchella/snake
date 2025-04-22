@@ -15,18 +15,34 @@ extern crate libc;
 
 use std::io::{self, Read, Write};
 use std::os::unix::io::AsRawFd;
-use std::time::Duration;
-use std::{thread};
-use libc::{termios, tcgetattr, tcsetattr, TCSANOW, ECHO, ICANON};
+use std::process;
+use libc::{termios, tcgetattr, tcsetattr, TCSANOW, ECHO, ICANON, sigaction, sighandler_t, SIGINT};
 
 
 const ESC:        u8 = 0x1B;
 const ASCII_ESC:  &str = "\x1B";
 const WND_WIDTH:  i8 = 46;
 const WND_HEIGHT: i8 = 15;
-const WND_WIDTH_MIDDLE:  i8 = WND_WIDTH/ 2;
-const WND_HEIGHT_MIDDLE: i8 = WND_HEIGHT/ 2;
+const WND_WIDTH_MIDDLE:  i8 = WND_WIDTH / 2;
+const WND_HEIGHT_MIDDLE: i8 = WND_HEIGHT / 2;
 
+
+extern "C" fn handle_sigint(_: i32) {
+    // We just need empty handler
+}
+
+fn setup_sigint_handler() {
+    unsafe {
+        let mut action: sigaction = std::mem::zeroed();
+        action.sa_sigaction = handle_sigint as sighandler_t;
+        action.sa_flags = 0; // Without SA_RESTART!
+
+        libc::sigemptyset(&mut action.sa_mask);
+        if libc::sigaction(SIGINT, &action, std::ptr::null_mut()) != 0 {
+            panic!("Не удалось установить sigaction");
+        }
+    }
+}
 
 fn clear_screen() {
     print!("{ASCII_ESC}[2J{ASCII_ESC}[H");
@@ -68,35 +84,71 @@ fn draw_borders() {
     println!("+{}+", horizontal);
 }
 
+fn set_raw_mode(fd: i32, orig: &mut termios) {
+    unsafe {
+        tcgetattr(fd, orig);
+        let mut raw = *orig;
+        raw.c_lflag &= !(ICANON | ECHO);
+        tcsetattr(fd, TCSANOW, &raw);
+    }
+}
+
+fn restore_mode(fd: i32, orig: &termios) {
+    unsafe {
+        tcsetattr(fd, TCSANOW, orig);
+    }
+}
+
+fn cleanup_and_exit(fd: i32, orig: &termios) -> ! {
+    restore_mode(fd, orig);
+    show_cursor();
+    process::exit(0);
+}
+
 fn main() {
     let stdin = io::stdin();
     let fd = stdin.as_raw_fd();
-    let mut term: termios = unsafe { std::mem::zeroed() };
+    let mut orig_termios: termios = unsafe { std::mem::zeroed() };
 
+    setup_sigint_handler();
+    set_raw_mode(fd, &mut orig_termios);
     clear_screen();
     draw_borders();
     write_char('@', WND_WIDTH_MIDDLE, WND_HEIGHT_MIDDLE);
 
-    unsafe {
-        tcgetattr(fd, &mut term);
-        let original = term;
-        term.c_lflag &= !(ICANON | ECHO);
-        tcsetattr(fd, TCSANOW, &term);
-
-        let mut buffer = [0u8; 1];
-        loop {
-            if let Ok(n) = stdin.lock().read(&mut buffer) {
-                if n > 0 {
-                    if buffer[0] == ESC {
-                        break;
-                    }
-                    println!("Код: {}", buffer[0]);
-                }
+    let mut buffer = [0; 3];
+    loop {
+        match stdin.lock().read(&mut buffer) {
+            Ok(n) if n == 0 => {
+                    println!("[!] EOF получен. Завершаем.");
+                    cleanup_and_exit(fd, &orig_termios);
             }
-            thread::sleep(Duration::from_millis(10));
+            Ok(n) => match &buffer[..n] {
+                [ESC, 91, 65] => println!("Стрелка вверх"),
+                [ESC, 91, 66] => println!("Стрелка вниз"),
+                [ESC, 91, 67] => println!("Стрелка вправо"),
+                [ESC, 91, 68] => println!("Стрелка влево"),
+                [ESC, ..]     => {
+                    println!("Нажат ESC — выход.");
+                    break;
+                }
+                [0x04] => {
+                        println!("Ctrl+D — выход");
+                        cleanup_and_exit(fd, &orig_termios);
+                    }
+                [b, ..] => {
+                    println!("Нажата клавиша: '{}' (код {})", *b as char, b);
+                }
+                _ => {}
+            }
+            Err(e) => {
+                eprintln!("\n[!] Ошибка чтения: {e}");
+                cleanup_and_exit(fd, &orig_termios);
+            }
         }
-        tcsetattr(fd, TCSANOW, &original);
+
+        buffer = [0; 3];
     }
 
-    show_cursor();
+    cleanup_and_exit(fd, &orig_termios);
 }
