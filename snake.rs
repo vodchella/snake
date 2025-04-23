@@ -33,6 +33,26 @@ const WND_HEIGHT:        i8 = 15;
 const WND_WIDTH_MIDDLE:  i8 = WND_WIDTH / 2;
 const WND_HEIGHT_MIDDLE: i8 = WND_HEIGHT / 2;
 const SNAKE_LENGTH:      usize = 8;
+const SNAKE_HEAD_CHARS:  [char; 4] = [
+    '^', '>', 'v', '<'
+];
+const HWALL:             &str = "-";
+const VWALL:             &str = "|";
+const CORNER:            &str = "+";
+const SNAKE_BODY:        char = '*';
+const EMPTY_SPACE:       char = ' ';
+const DISSALLOWED_DIRS:  [SnakeDirection; 4] = [
+    SnakeDirection::Down,
+    SnakeDirection::Left,
+    SnakeDirection::Up,
+    SnakeDirection::Right,
+];
+const MOVING_RULES:      [Point; 4] = [
+    Point{ x:  0, y: -1 },
+    Point{ x:  1, y:  0 },
+    Point{ x:  0, y:  1 },
+    Point{ x: -1, y:  0 },
+];
 
 
 #[derive(PartialEq, Clone)]
@@ -42,24 +62,6 @@ enum SnakeDirection {
     Down,
     Left,
 }
-
-const DISSALLOWED_DIRS: [SnakeDirection; 4] = [
-    SnakeDirection::Down,
-    SnakeDirection::Left,
-    SnakeDirection::Up,
-    SnakeDirection::Right,
-];
-
-const HEAD_CHARS: [char; 4] = [
-    '^', '>', 'v', '<'
-];
-
-const MOVING_RULES: [Point; 4] = [
-    Point{ x:  0, y: -1 },
-    Point{ x:  1, y:  0 },
-    Point{ x:  0, y:  1 },
-    Point{ x: -1, y:  0 },
-];
 
 struct GameState {
     should_exit: bool,
@@ -136,14 +138,15 @@ fn write_char(c: char, x: i8, y: i8) {
 }
 
 fn draw_borders() {
-    let horizontal = "-".repeat((WND_WIDTH - 2) as usize);
-    let empty_space = " ".repeat((WND_WIDTH - 2) as usize);
+    let horizontal = HWALL.repeat((WND_WIDTH - 2) as usize);
+    let h_wall = format!("{}{}{}", CORNER, horizontal, CORNER);
+    let empty = EMPTY_SPACE.to_string().repeat((WND_WIDTH - 2) as usize);
 
-    println!("+{}+", horizontal);
+    println!("{}", h_wall);
     for _ in 0..(WND_HEIGHT - 2) {
-        println!("|{}|", empty_space);
+        println!("{}{}{}", VWALL, empty, VWALL);
     }
-    println!("+{}+", horizontal);
+    println!("{}", h_wall);
 }
 
 fn cleanup_and_exit(fd: i32, orig: &termios, exit_code: i32) -> ! {
@@ -169,17 +172,17 @@ fn snake_worker(game_state_ref: Arc<Mutex<GameState>>) {
 
     fn snake_move_and_draw(body: &mut [Point; SNAKE_LENGTH], dir: SnakeDirection) {
         let tail = body[SNAKE_LENGTH - 1];
-        write_char(' ', tail.x, tail.y);
+        write_char(EMPTY_SPACE, tail.x, tail.y);
 
         for i in (1..body.len()).rev() {
             body[i] = body[i - 1];
-            write_char('*',  body[i].x, body[i].y);
+            write_char(SNAKE_BODY, body[i].x, body[i].y);
         }
 
         let rule = MOVING_RULES[dir.clone() as usize];
         body[0].x += rule.x;
         body[0].y += rule.y;
-        write_char(HEAD_CHARS[dir as usize], body[0].x, body[0].y);
+        write_char(SNAKE_HEAD_CHARS[dir as usize], body[0].x, body[0].y);
     }
 
     fn snake_has_collisions(body: &[Point; SNAKE_LENGTH]) -> bool {
