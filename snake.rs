@@ -13,13 +13,13 @@
 
 extern crate libc;
 
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Write, stdout};
 use std::os::unix::io::AsRawFd;
 use std::sync::{Arc, Mutex};
-use std::process;
+use std::process::exit;
 use std::thread::{sleep, spawn};
 use std::time::Duration;
-use libc::{termios, tcgetattr, tcsetattr, TCSANOW, ECHO, ICANON, sigaction, sighandler_t, SIGINT, SIGTERM, SIGQUIT, SIGTSTP};
+use libc::{termios, tcgetattr, tcsetattr, TCSANOW, ECHO, ICANON, sigaction, sigemptyset, sighandler_t, SIGINT, SIGTERM, SIGQUIT, SIGTSTP};
 
 
 const ASCII_ESC:         &str = "\x1B";
@@ -33,6 +33,7 @@ const WND_WIDTH:         i8 = 46;
 const WND_HEIGHT:        i8 = 15;
 const WND_WIDTH_MIDDLE:  i8 = WND_WIDTH / 2;
 const WND_HEIGHT_MIDDLE: i8 = WND_HEIGHT / 2;
+const SNAKE_DELAY:       Duration = Duration::from_millis(500);
 const SNAKE_LENGTH:      usize = 8;
 const SNAKE_BODY:        char = '*';
 const SNAKE_HEAD_CHARS:  [char; 4] = [
@@ -56,7 +57,7 @@ const MOVING_RULES:      [Point; 4] = [
 ];
 
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Copy, Clone)]
 enum SnakeDirection {
     Up,
     Right,
@@ -86,10 +87,10 @@ fn setup_signal_handlers() {
         let mut action: sigaction = std::mem::zeroed();
         action.sa_sigaction = handle_signal as sighandler_t;
         action.sa_flags = 0; // Without SA_RESTART!
-        libc::sigemptyset(&mut action.sa_mask);
+        sigemptyset(&mut action.sa_mask);
 
         for &sig in &[SIGINT, SIGTERM, SIGQUIT, SIGTSTP] {
-            libc::sigaction(sig, &action, std::ptr::null_mut());
+            sigaction(sig, &action, std::ptr::null_mut());
         }
     }
 }
@@ -111,31 +112,31 @@ fn restore_mode(fd: i32, orig: &termios) {
 
 fn clear_screen() {
     print!("{ASCII_ESC}[2J{ASCII_ESC}[H");
-    io::stdout().flush().unwrap();
+    stdout().flush().unwrap();
 }
 
 fn move_cursor(x: i8, y: i8) {
     let pos_x: i8 = x + 1;
     let pos_y: i8 = y + 1;
     print!("{ASCII_ESC}[{pos_y};{pos_x}H");
-    io::stdout().flush().unwrap();
+    stdout().flush().unwrap();
 }
 
 fn show_cursor() {
     print!("{ASCII_ESC}[?25h");
-    io::stdout().flush().unwrap();
+    stdout().flush().unwrap();
 }
 
 fn hide_cursor() {
     print!("{ASCII_ESC}[?25l");
-    io::stdout().flush().unwrap();
+    stdout().flush().unwrap();
 }
 
 fn write_char(c: char, x: i8, y: i8) {
     move_cursor(x, y);
     print!("{}", c);
     hide_cursor();
-    io::stdout().flush().unwrap();
+    stdout().flush().unwrap();
 }
 
 fn draw_borders() {
@@ -155,7 +156,7 @@ fn cleanup_and_exit(fd: i32, orig: &termios, exit_code: i32) -> ! {
     restore_mode(fd, orig);
     show_cursor();
     clear_screen();
-    process::exit(exit_code);
+    exit(exit_code);
 }
 
 
@@ -181,7 +182,7 @@ fn snake_worker(game_state_ref: Arc<Mutex<GameState>>) {
             write_char(SNAKE_BODY, body[i].x, body[i].y);
         }
 
-        let rule = MOVING_RULES[dir.clone() as usize];
+        let rule = MOVING_RULES[dir as usize];
         body[0].x += rule.x;
         body[0].y += rule.y;
         write_char(SNAKE_HEAD_CHARS[dir as usize], body[0].x, body[0].y);
@@ -210,10 +211,10 @@ fn snake_worker(game_state_ref: Arc<Mutex<GameState>>) {
         }
 
         let try_dir = &game_state.snake_dir;
-        if *try_dir != current_dir && *try_dir != DISSALLOWED_DIRS[current_dir.clone() as usize] {
-            current_dir = try_dir.clone();
+        if *try_dir != current_dir && *try_dir != DISSALLOWED_DIRS[current_dir as usize] {
+            current_dir = *try_dir;
         }
-        snake_move_and_draw(&mut snake_body, current_dir.clone());
+        snake_move_and_draw(&mut snake_body, current_dir);
         if snake_has_collisions(&snake_body) {
             move_cursor(WND_WIDTH_MIDDLE - 5, WND_HEIGHT_MIDDLE);
             println!("Game over!");
@@ -221,7 +222,7 @@ fn snake_worker(game_state_ref: Arc<Mutex<GameState>>) {
         }
 
         drop(game_state);
-        sleep(Duration::from_millis(500));
+        sleep(SNAKE_DELAY);
     }
 }
 
