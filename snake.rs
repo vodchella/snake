@@ -149,6 +149,7 @@ fn draw_borders() {
 fn cleanup_and_exit(fd: i32, orig: &termios, exit_code: i32) -> ! {
     restore_mode(fd, orig);
     show_cursor();
+    clear_screen();
     process::exit(exit_code);
 }
 
@@ -181,10 +182,24 @@ fn snake_worker(game_state_ref: Arc<Mutex<GameState>>) {
         write_char(HEAD_CHARS[dir as usize], body[0].x, body[0].y);
     }
 
+    fn snake_has_collisions(body: &[Point; SNAKE_LENGTH]) -> bool {
+        let head_x = body[0].x + 1;
+        let head_y = body[0].y + 1;
+        if [1, WND_HEIGHT].contains(&head_y) || [1, WND_WIDTH].contains(&head_x) {
+            return true;
+        }
+        for i in 4..body.len() {
+            if body[i].x == body[0].x && body[i].y == body[0].y {
+                return true;
+            }
+        }
+        false
+    }
+
     snake_init(&mut snake_body);
 
     loop {
-        let game_state = game_state_ref.lock().unwrap();
+        let mut game_state = game_state_ref.lock().unwrap();
         if game_state.should_exit || game_state.exit_code != 0 {
             break;
         }
@@ -194,6 +209,11 @@ fn snake_worker(game_state_ref: Arc<Mutex<GameState>>) {
             current_dir = try_dir.clone();
         }
         snake_move_and_draw(&mut snake_body, current_dir.clone());
+        if snake_has_collisions(&snake_body) {
+            move_cursor(WND_WIDTH_MIDDLE - 5, WND_HEIGHT_MIDDLE);
+            println!("Game over!");
+            game_state.should_exit = true;
+        }
 
         drop(game_state);
         sleep(Duration::from_millis(500));
