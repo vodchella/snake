@@ -24,6 +24,7 @@ use libc::{termios, tcgetattr, tcsetattr, TCSANOW, ECHO, ICANON, sigaction, sigh
 
 const ASCII_ESC:         &str = "\x1B";
 const ESC:               u8 = 0x1B;
+const CSI:               u8 = 91;
 const ARROW_UP:          u8 = 65;
 const ARROW_DOWN:        u8 = 66;
 const ARROW_RIGHT:       u8 = 67;
@@ -256,10 +257,10 @@ fn main() {
                 game_state.exit_code = 1;
             }
             Ok(bytes_read) => match &buffer[..bytes_read] {
-                [ESC, 91, ARROW_UP]    => game_state.snake_dir = SnakeDirection::Up,
-                [ESC, 91, ARROW_DOWN]  => game_state.snake_dir = SnakeDirection::Down,
-                [ESC, 91, ARROW_RIGHT] => game_state.snake_dir = SnakeDirection::Right,
-                [ESC, 91, ARROW_LEFT]  => game_state.snake_dir = SnakeDirection::Left,
+                [ESC, CSI, ARROW_UP]    => game_state.snake_dir = SnakeDirection::Up,
+                [ESC, CSI, ARROW_DOWN]  => game_state.snake_dir = SnakeDirection::Down,
+                [ESC, CSI, ARROW_RIGHT] => game_state.snake_dir = SnakeDirection::Right,
+                [ESC, CSI, ARROW_LEFT]  => game_state.snake_dir = SnakeDirection::Left,
                 [ESC, ..] => {
                     game_state.should_exit = true;
                 }
