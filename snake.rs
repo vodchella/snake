@@ -15,16 +15,49 @@ extern crate libc;
 
 use std::io::{self, Read, Write};
 use std::os::unix::io::AsRawFd;
+use std::sync::{Arc, Mutex};
 use std::process;
+use std::thread::{sleep, spawn};
+use std::time::Duration;
 use libc::{termios, tcgetattr, tcsetattr, TCSANOW, ECHO, ICANON, sigaction, sighandler_t, SIGINT, SIGTERM, SIGQUIT, SIGTSTP};
 
 
-const ESC:        u8 = 0x1B;
-const ASCII_ESC:  &str = "\x1B";
-const WND_WIDTH:  i8 = 46;
-const WND_HEIGHT: i8 = 15;
+const ASCII_ESC:    &str = "\x1B";
+const ESC:          u8 = 0x1B;
+const ARROW_UP:     u8 = 65;
+const ARROW_DOWN:   u8 = 66;
+const ARROW_RIGHT:  u8 = 67;
+const ARROW_LEFT:   u8 = 68;
+const WND_WIDTH:    i8 = 46;
+const WND_HEIGHT:   i8 = 15;
 const WND_WIDTH_MIDDLE:  i8 = WND_WIDTH / 2;
 const WND_HEIGHT_MIDDLE: i8 = WND_HEIGHT / 2;
+
+
+#[derive(PartialEq, Clone)]
+enum SnakeDirection {
+    Up,
+    Right,
+    Down,
+    Left
+}
+
+const DISSALLOWED_DIRS: [SnakeDirection; 4] = [
+    SnakeDirection::Down,
+    SnakeDirection::Left,
+    SnakeDirection::Up,
+    SnakeDirection::Right
+];
+
+const HEAD_CHARS: [char; 4] = [
+    '^', '>', 'v', '<'
+];
+
+struct GameState {
+    should_exit: bool,
+    exit_code: i32,
+    snake_dir: SnakeDirection,
+}
 
 
 extern "C" fn handle_signal(_: i32) {
@@ -105,7 +138,30 @@ fn cleanup_and_exit(fd: i32, orig: &termios, exit_code: i32) -> ! {
     process::exit(exit_code);
 }
 
+
+fn snake_worker(game_state_ref: Arc<Mutex<GameState>>) {
+    let mut last_dir = SnakeDirection::Up;
+    write_char(HEAD_CHARS[0], WND_WIDTH_MIDDLE, WND_HEIGHT_MIDDLE);
+
+    loop {
+        let game_state = game_state_ref.lock().unwrap();
+        if game_state.should_exit || game_state.exit_code != 0 {
+            break;
+        }
+
+        let try_dir = &game_state.snake_dir;
+        if *try_dir != last_dir && *try_dir != DISSALLOWED_DIRS[last_dir.clone() as usize] {
+            last_dir = try_dir.clone();
+            write_char(HEAD_CHARS[last_dir.clone() as usize], WND_WIDTH_MIDDLE, WND_HEIGHT_MIDDLE);
+        }
+
+        drop(game_state);
+        sleep(Duration::from_millis(500));
+    }
+}
+
 fn main() {
+    let exit_code: i32;
     let stdin = io::stdin();
     let fd = stdin.as_raw_fd();
     let mut orig_termios: termios = unsafe { std::mem::zeroed() };
@@ -114,38 +170,51 @@ fn main() {
     set_raw_mode(fd, &mut orig_termios);
     clear_screen();
     draw_borders();
-    write_char('@', WND_WIDTH_MIDDLE, WND_HEIGHT_MIDDLE);
+
+    let game_state_ref = Arc::new(Mutex::new(GameState {
+        should_exit: false,
+        exit_code: 0,
+        snake_dir: SnakeDirection::Up,
+    }));
+    let cloned = Arc::clone(&game_state_ref);
+    spawn(move || {
+        snake_worker(cloned);
+    });
+
 
     let mut buffer = [0; 3];
     loop {
-        match stdin.lock().read(&mut buffer) {
-            Ok(0) => {
-                    println!("[!] EOF получен. Завершаем.");
-                    cleanup_and_exit(fd, &orig_termios, 1);
+        let bytes_read = stdin.lock().read(&mut buffer);
+        let mut game_state = game_state_ref.lock().unwrap();
+
+        match bytes_read {
+            Ok(0) => { // EOF
+                game_state.exit_code = 1;
             }
-            Ok(n) => match &buffer[..n] {
-                [ESC, 91, 65] => println!("Стрелка вверх"),
-                [ESC, 91, 66] => println!("Стрелка вниз"),
-                [ESC, 91, 67] => println!("Стрелка вправо"),
-                [ESC, 91, 68] => println!("Стрелка влево"),
-                [ESC, ..]     => {
-                    println!("Нажат ESC — выход.");
-                    break;
+            Ok(bytes_read) => match &buffer[..bytes_read] {
+                [ESC, 91, ARROW_UP]    => game_state.snake_dir = SnakeDirection::Up,
+                [ESC, 91, ARROW_DOWN]  => game_state.snake_dir = SnakeDirection::Down,
+                [ESC, 91, ARROW_RIGHT] => game_state.snake_dir = SnakeDirection::Right,
+                [ESC, 91, ARROW_LEFT]  => game_state.snake_dir = SnakeDirection::Left,
+                [ESC, ..] => {
+                    game_state.should_exit = true;
                 }
-                [0x04] => {
-                        println!("Ctrl+D — выход");
-                        cleanup_and_exit(fd, &orig_termios, 1);
+                [0x04] => { // Ctrl+D
+                        game_state.exit_code = 1;
                     }
                 _ => {}
             }
-            Err(e) => {
-                eprintln!("\n[!] Ошибка чтения: {e}");
-                cleanup_and_exit(fd, &orig_termios, 1);
+            Err(_e) => {
+                game_state.exit_code = 1;
             }
         }
 
         buffer = [0; 3];
+        if game_state.should_exit || game_state.exit_code != 0 {
+            exit_code = game_state.exit_code;
+            break;
+        }
     }
 
-    cleanup_and_exit(fd, &orig_termios, 0);
+    cleanup_and_exit(fd, &orig_termios, exit_code);
 }
