@@ -44,6 +44,21 @@ fn setup_signal_handlers() {
     }
 }
 
+fn set_raw_mode(fd: i32, orig: &mut termios) {
+    unsafe {
+        tcgetattr(fd, orig);
+        let mut raw = *orig;
+        raw.c_lflag &= !(ICANON | ECHO);
+        tcsetattr(fd, TCSANOW, &raw);
+    }
+}
+
+fn restore_mode(fd: i32, orig: &termios) {
+    unsafe {
+        tcsetattr(fd, TCSANOW, orig);
+    }
+}
+
 fn clear_screen() {
     print!("{ASCII_ESC}[2J{ASCII_ESC}[H");
     io::stdout().flush().unwrap();
@@ -84,25 +99,10 @@ fn draw_borders() {
     println!("+{}+", horizontal);
 }
 
-fn set_raw_mode(fd: i32, orig: &mut termios) {
-    unsafe {
-        tcgetattr(fd, orig);
-        let mut raw = *orig;
-        raw.c_lflag &= !(ICANON | ECHO);
-        tcsetattr(fd, TCSANOW, &raw);
-    }
-}
-
-fn restore_mode(fd: i32, orig: &termios) {
-    unsafe {
-        tcsetattr(fd, TCSANOW, orig);
-    }
-}
-
-fn cleanup_and_exit(fd: i32, orig: &termios) -> ! {
+fn cleanup_and_exit(fd: i32, orig: &termios, exit_code: i32) -> ! {
     restore_mode(fd, orig);
     show_cursor();
-    process::exit(0);
+    process::exit(exit_code);
 }
 
 fn main() {
@@ -119,9 +119,9 @@ fn main() {
     let mut buffer = [0; 3];
     loop {
         match stdin.lock().read(&mut buffer) {
-            Ok(n) if n == 0 => {
+            Ok(0) => {
                     println!("[!] EOF получен. Завершаем.");
-                    cleanup_and_exit(fd, &orig_termios);
+                    cleanup_and_exit(fd, &orig_termios, 1);
             }
             Ok(n) => match &buffer[..n] {
                 [ESC, 91, 65] => println!("Стрелка вверх"),
@@ -134,21 +134,18 @@ fn main() {
                 }
                 [0x04] => {
                         println!("Ctrl+D — выход");
-                        cleanup_and_exit(fd, &orig_termios);
+                        cleanup_and_exit(fd, &orig_termios, 1);
                     }
-                [b, ..] => {
-                    println!("Нажата клавиша: '{}' (код {})", *b as char, b);
-                }
                 _ => {}
             }
             Err(e) => {
                 eprintln!("\n[!] Ошибка чтения: {e}");
-                cleanup_and_exit(fd, &orig_termios);
+                cleanup_and_exit(fd, &orig_termios, 1);
             }
         }
 
         buffer = [0; 3];
     }
 
-    cleanup_and_exit(fd, &orig_termios);
+    cleanup_and_exit(fd, &orig_termios, 0);
 }
