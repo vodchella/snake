@@ -33,13 +33,13 @@ const WND_HEIGHT:        i8 = 15;
 const WND_WIDTH_MIDDLE:  i8 = WND_WIDTH / 2;
 const WND_HEIGHT_MIDDLE: i8 = WND_HEIGHT / 2;
 const SNAKE_LENGTH:      usize = 8;
+const SNAKE_BODY:        char = '*';
 const SNAKE_HEAD_CHARS:  [char; 4] = [
     '^', '>', 'v', '<'
 ];
 const HWALL:             &str = "-";
 const VWALL:             &str = "|";
 const CORNER:            &str = "+";
-const SNAKE_BODY:        char = '*';
 const EMPTY_SPACE:       char = ' ';
 const DISSALLOWED_DIRS:  [SnakeDirection; 4] = [
     SnakeDirection::Down,
@@ -139,12 +139,13 @@ fn write_char(c: char, x: i8, y: i8) {
 
 fn draw_borders() {
     let horizontal = HWALL.repeat((WND_WIDTH - 2) as usize);
-    let h_wall = format!("{}{}{}", CORNER, horizontal, CORNER);
     let empty = EMPTY_SPACE.to_string().repeat((WND_WIDTH - 2) as usize);
+    let h_wall = format!("{}{}{}", CORNER, horizontal, CORNER);
+    let v_wall = format!("{}{}{}", VWALL, empty, VWALL);
 
     println!("{}", h_wall);
     for _ in 0..(WND_HEIGHT - 2) {
-        println!("{}{}{}", VWALL, empty, VWALL);
+        println!("{}", v_wall);
     }
     println!("{}", h_wall);
 }
