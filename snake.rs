@@ -22,16 +22,17 @@ use std::time::Duration;
 use libc::{termios, tcgetattr, tcsetattr, TCSANOW, ECHO, ICANON, sigaction, sighandler_t, SIGINT, SIGTERM, SIGQUIT, SIGTSTP};
 
 
-const ASCII_ESC:    &str = "\x1B";
-const ESC:          u8 = 0x1B;
-const ARROW_UP:     u8 = 65;
-const ARROW_DOWN:   u8 = 66;
-const ARROW_RIGHT:  u8 = 67;
-const ARROW_LEFT:   u8 = 68;
-const WND_WIDTH:    i8 = 46;
-const WND_HEIGHT:   i8 = 15;
+const ASCII_ESC:         &str = "\x1B";
+const ESC:               u8 = 0x1B;
+const ARROW_UP:          u8 = 65;
+const ARROW_DOWN:        u8 = 66;
+const ARROW_RIGHT:       u8 = 67;
+const ARROW_LEFT:        u8 = 68;
+const WND_WIDTH:         i8 = 46;
+const WND_HEIGHT:        i8 = 15;
 const WND_WIDTH_MIDDLE:  i8 = WND_WIDTH / 2;
 const WND_HEIGHT_MIDDLE: i8 = WND_HEIGHT / 2;
+const SNAKE_LENGTH:      usize = 8;
 
 
 #[derive(PartialEq, Clone)]
@@ -39,24 +40,37 @@ enum SnakeDirection {
     Up,
     Right,
     Down,
-    Left
+    Left,
 }
 
 const DISSALLOWED_DIRS: [SnakeDirection; 4] = [
     SnakeDirection::Down,
     SnakeDirection::Left,
     SnakeDirection::Up,
-    SnakeDirection::Right
+    SnakeDirection::Right,
 ];
 
 const HEAD_CHARS: [char; 4] = [
     '^', '>', 'v', '<'
 ];
 
+const MOVING_RULES: [Point; 4] = [
+    Point{ x:  0, y: -1 },
+    Point{ x:  1, y:  0 },
+    Point{ x:  0, y:  1 },
+    Point{ x: -1, y:  0 },
+];
+
 struct GameState {
     should_exit: bool,
     exit_code: i32,
     snake_dir: SnakeDirection,
+}
+
+#[derive(Copy, Clone)]
+struct Point {
+    x: i8,
+    y: i8,
 }
 
 
@@ -140,8 +154,34 @@ fn cleanup_and_exit(fd: i32, orig: &termios, exit_code: i32) -> ! {
 
 
 fn snake_worker(game_state_ref: Arc<Mutex<GameState>>) {
-    let mut last_dir = SnakeDirection::Up;
-    write_char(HEAD_CHARS[0], WND_WIDTH_MIDDLE, WND_HEIGHT_MIDDLE);
+    let mut current_dir = SnakeDirection::Up;
+    let mut snake_body: [Point; SNAKE_LENGTH] = [Point{ x: 0, y: 0 }; SNAKE_LENGTH];
+
+    fn snake_init(body: &mut [Point; SNAKE_LENGTH]) {
+        body[0].x = WND_WIDTH_MIDDLE;
+        body[0].y = WND_HEIGHT_MIDDLE - 1;
+        for i in 1..body.len() {
+            body[i].x = body[i - 1].x;
+            body[i].y = body[i - 1].y + 1;
+        }
+    }
+
+    fn snake_move_and_draw(body: &mut [Point; SNAKE_LENGTH], dir: SnakeDirection) {
+        let tail = body[SNAKE_LENGTH - 1];
+        write_char(' ', tail.x, tail.y);
+
+        for i in (1..body.len()).rev() {
+            body[i] = body[i - 1];
+            write_char('*',  body[i].x, body[i].y);
+        }
+
+        let rule = MOVING_RULES[dir.clone() as usize];
+        body[0].x += rule.x;
+        body[0].y += rule.y;
+        write_char(HEAD_CHARS[dir as usize], body[0].x, body[0].y);
+    }
+
+    snake_init(&mut snake_body);
 
     loop {
         let game_state = game_state_ref.lock().unwrap();
@@ -150,10 +190,10 @@ fn snake_worker(game_state_ref: Arc<Mutex<GameState>>) {
         }
 
         let try_dir = &game_state.snake_dir;
-        if *try_dir != last_dir && *try_dir != DISSALLOWED_DIRS[last_dir.clone() as usize] {
-            last_dir = try_dir.clone();
-            write_char(HEAD_CHARS[last_dir.clone() as usize], WND_WIDTH_MIDDLE, WND_HEIGHT_MIDDLE);
+        if *try_dir != current_dir && *try_dir != DISSALLOWED_DIRS[current_dir.clone() as usize] {
+            current_dir = try_dir.clone();
         }
+        snake_move_and_draw(&mut snake_body, current_dir.clone());
 
         drop(game_state);
         sleep(Duration::from_millis(500));
