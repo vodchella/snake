@@ -9,16 +9,28 @@
 
 import gleam/erlang/process
 import gleam/io
+import gleam/int
 import gleam/list
 import gleam/option.{type Option, Some, None, unwrap}
 import prng/random.{type Generator}
 import prng/seed
 
 
-type SnakeDirection { Up Right Down Left }
-const snake_head_chars = ["^", ">", "v", "<"]
-const disallowed_dirs  = [Down, Left, Up, Right]
+type SnakeDirection      { Up Right Down Left }
+const snake_head_chars   = ["^", ">", "v", "<"]
+const disallowed_dirs    = [Down, Left, Up, Right]
+const ascii_esc: String  = "\u{001b}"
+const wnd_width          = 46
+const wnd_height         = 15
 
+
+fn clear_screen() {
+    io.print(ascii_esc <> "[2J" <> ascii_esc <> "[H")
+}
+
+fn move_cursor(x, y : Int) {
+    io.print(ascii_esc <> "[" <> int.to_string(y + 1) <> ";" <> int.to_string(x + 1) <> "H")
+}
 
 fn is_even(n: Int) -> Bool {
     n % 2 == 0
@@ -70,6 +82,7 @@ fn get_next_random_dir(dir: SnakeDirection) -> SnakeDirection {
 }
 
 fn loop(cur_dir: SnakeDirection, tick: Int) {
+    move_cursor({wnd_width / 2} - 5, wnd_height / 2)
     io.println("Head: " <> get_snake_head_char(cur_dir))
     process.sleep(500)
     let new_dir = case is_even(tick) {
@@ -80,5 +93,6 @@ fn loop(cur_dir: SnakeDirection, tick: Int) {
 }
 
 pub fn main() {
+    clear_screen()
     loop(Up, 1)
 }
