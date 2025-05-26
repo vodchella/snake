@@ -3,3 +3,4 @@
 !*.pas
 !*.adb
 !*.rs
+!*.gleam
