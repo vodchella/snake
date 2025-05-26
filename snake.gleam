@@ -20,7 +20,11 @@ const snake_head_chars = ["^", ">", "v", "<"]
 const disallowed_dirs  = [Down, Left, Up, Right]
 
 
-fn list_at(lst: List(t), i: Int) -> Option(t) {
+fn is_even(n: Int) -> Bool {
+    n % 2 == 0
+}
+
+fn list_item_at(lst: List(t), i: Int) -> Option(t) {
     case list.drop(lst, i) {
         [val, .._] -> Some(val)
         []         -> None
@@ -47,7 +51,7 @@ fn dir_to_int(dir: SnakeDirection) -> Int {
 }
 
 fn get_snake_head_char(dir: SnakeDirection) -> String {
-    case list_at(snake_head_chars, dir_to_int(dir)) {
+    case list_item_at(snake_head_chars, dir_to_int(dir)) {
         Some(char) -> char
         None       -> panic as "ERROR: Invalid snake direction"
     }
@@ -58,20 +62,23 @@ fn get_next_random_dir(dir: SnakeDirection) -> SnakeDirection {
     let #(rand_index, _) = gen |> random.step(seed.random())
     let possible_dir = int_to_dir(rand_index)
     let dir_index = dir_to_int(dir)
-    let disallowed_dir = unwrap(list_at(disallowed_dirs, dir_index), dir)
+    let disallowed_dir = unwrap(list_item_at(disallowed_dirs, dir_index), dir)
     case possible_dir {
-        d if d == dir            -> get_next_random_dir(dir)
         d if d == disallowed_dir -> get_next_random_dir(dir)
         _ -> possible_dir
     }
 }
 
-fn loop(cur_dir: SnakeDirection) {
+fn loop(cur_dir: SnakeDirection, tick: Int) {
     io.println("Head: " <> get_snake_head_char(cur_dir))
     process.sleep(500)
-    loop(get_next_random_dir(cur_dir))
+    let new_dir = case is_even(tick) {
+        True  -> get_next_random_dir(cur_dir)
+        False -> cur_dir
+    }
+    loop(new_dir, tick + 1)
 }
 
 pub fn main() {
-    loop(Up)
+    loop(Up, 1)
 }
