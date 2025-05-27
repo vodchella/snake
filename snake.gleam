@@ -6,11 +6,11 @@
 //
 // Run it with: gleam run
 
-import gleam/erlang/process
-import gleam/io
-import gleam/int
-import gleam/list
-import gleam/option.{type Option, Some, None, unwrap}
+import gleam/erlang/process.{sleep}
+import gleam/io.{print, println}
+import gleam/int.{is_even, to_string, random}
+import gleam/list.{drop}
+import gleam/option.{unwrap, type Option, Some, None}
 
 
 type SnakeDirection      { Up Right Down Left }
@@ -22,15 +22,15 @@ const wnd_height         = 15
 
 
 fn clear_screen() {
-    io.print(ascii_esc <> "[2J" <> ascii_esc <> "[H")
+    print(ascii_esc <> "[2J" <> ascii_esc <> "[H")
 }
 
 fn move_cursor(x, y : Int) {
-    io.print(ascii_esc <> "[" <> int.to_string(y + 1) <> ";" <> int.to_string(x + 1) <> "H")
+    print(ascii_esc <> "[" <> to_string(y + 1) <> ";" <> to_string(x + 1) <> "H")
 }
 
 fn list_item_at(lst: List(t), i: Int) -> Option(t) {
-    case list.drop(lst, i) {
+    case drop(lst, i) {
         [val, .._] -> Some(val)
         []         -> None
     }
@@ -63,10 +63,11 @@ fn get_snake_head_char(dir: SnakeDirection) -> String {
 }
 
 fn get_next_random_dir(dir: SnakeDirection) -> SnakeDirection {
-    let rand_index = int.random(4)
+    let rand_index = random(4)
     let possible_dir = int_to_dir(rand_index)
     let dir_index = dir_to_int(dir)
-    let disallowed_dir = unwrap(list_item_at(disallowed_dirs, dir_index), dir)
+    let disallowed_dir = list_item_at(disallowed_dirs, dir_index)
+                         |> unwrap(dir)
     case possible_dir {
         d if d == disallowed_dir -> get_next_random_dir(dir)
         _ -> possible_dir
@@ -75,9 +76,9 @@ fn get_next_random_dir(dir: SnakeDirection) -> SnakeDirection {
 
 fn loop(cur_dir: SnakeDirection, tick: Int) {
     move_cursor({wnd_width / 2} - 5, wnd_height / 2)
-    io.println("Head: " <> get_snake_head_char(cur_dir))
-    process.sleep(500)
-    let new_dir = case int.is_even(tick) {
+    println("Head: " <> get_snake_head_char(cur_dir))
+    sleep(500)
+    let new_dir = case is_even(tick) {
         True  -> get_next_random_dir(cur_dir)
         False -> cur_dir
     }
