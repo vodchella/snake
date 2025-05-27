@@ -3,7 +3,6 @@
 //     [dependencies]
 //     gleam_stdlib = ">= 0.44.0 and < 2.0.0"
 //     gleam_erlang = ">= 0.34.0 and < 1.0.0"
-//     prng = ">= 4.0.1 and < 5.0.0"
 //
 // Run it with: gleam run
 
@@ -12,8 +11,6 @@ import gleam/io
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, Some, None, unwrap}
-import prng/random.{type Generator}
-import prng/seed
 
 
 type SnakeDirection      { Up Right Down Left }
@@ -32,21 +29,11 @@ fn move_cursor(x, y : Int) {
     io.print(ascii_esc <> "[" <> int.to_string(y + 1) <> ";" <> int.to_string(x + 1) <> "H")
 }
 
-fn is_even(n: Int) -> Bool {
-    n % 2 == 0
-}
-
 fn list_item_at(lst: List(t), i: Int) -> Option(t) {
     case list.drop(lst, i) {
         [val, .._] -> Some(val)
         []         -> None
     }
-}
-
-fn gen_rand_int(beg, end: Int) -> Int {
-    let gen: Generator(Int) = random.int(beg, end)
-    let #(result, _) = gen |> random.step(seed.random())
-    result
 }
 
 fn int_to_dir(index: Int) -> SnakeDirection {
@@ -76,7 +63,7 @@ fn get_snake_head_char(dir: SnakeDirection) -> String {
 }
 
 fn get_next_random_dir(dir: SnakeDirection) -> SnakeDirection {
-    let rand_index = gen_rand_int(0, 3)
+    let rand_index = int.random(4)
     let possible_dir = int_to_dir(rand_index)
     let dir_index = dir_to_int(dir)
     let disallowed_dir = unwrap(list_item_at(disallowed_dirs, dir_index), dir)
@@ -90,7 +77,7 @@ fn loop(cur_dir: SnakeDirection, tick: Int) {
     move_cursor({wnd_width / 2} - 5, wnd_height / 2)
     io.println("Head: " <> get_snake_head_char(cur_dir))
     process.sleep(500)
-    let new_dir = case is_even(tick) {
+    let new_dir = case int.is_even(tick) {
         True  -> get_next_random_dir(cur_dir)
         False -> cur_dir
     }
