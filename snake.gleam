@@ -10,7 +10,7 @@ import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
 import gleam/int.{is_even, to_string, random}
 import gleam/list.{drop}
-import gleam/option.{unwrap, type Option, Some, None}
+import gleam/option.{lazy_unwrap, type Option, Some, None}
 
 
 type SnakeDirection      { Up Right Down Left }
@@ -67,7 +67,7 @@ fn get_next_random_dir(dir: SnakeDirection) -> SnakeDirection {
     let possible_dir = int_to_dir(rand_index)
     let dir_index = dir_to_int(dir)
     let disallowed_dir = list_item_at(disallowed_dirs, dir_index)
-                         |> unwrap(dir)
+                         |> lazy_unwrap(fn() { panic as "ERROR: can't find disallowed dir" })
     case possible_dir {
         d if d == disallowed_dir -> get_next_random_dir(dir)
         _ -> possible_dir
