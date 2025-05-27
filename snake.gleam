@@ -6,6 +6,7 @@
 //
 // Run it with: gleam run
 
+import gleam/bool.{lazy_guard}
 import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
 import gleam/int.{is_even, to_string, random}
@@ -63,15 +64,13 @@ fn get_snake_head_char(dir: SnakeDirection) -> String {
 }
 
 fn get_next_random_dir(dir: SnakeDirection) -> SnakeDirection {
-    let rand_index = random(4)
-    let possible_dir = int_to_dir(rand_index)
-    let dir_index = dir_to_int(dir)
-    let disallowed_dir = list_item_at(disallowed_dirs, dir_index)
+    let new_dir = random(4) |> int_to_dir()
+    let disallowed_dir = dir_to_int(dir)
+                         |> list_item_at(disallowed_dirs, _)
                          |> lazy_unwrap(fn() { panic as "ERROR: can't find disallowed dir" })
-    case possible_dir {
-        d if d == disallowed_dir -> get_next_random_dir(dir)
-        _ -> possible_dir
-    }
+    use <- lazy_guard(when: new_dir == disallowed_dir,
+                      return: fn() { get_next_random_dir(dir) })
+    new_dir
 }
 
 fn loop(cur_dir: SnakeDirection, tick: Int) {
