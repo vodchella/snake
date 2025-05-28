@@ -123,6 +123,11 @@ fn snake_get_head(snake: Snake) -> Point {
     |> lazy_unwrap(fn() { panic as "ERROR: can't find snake head" })
 }
 
+fn snake_get_tail(snake: Snake) -> Point {
+    list_item_at(snake.body, snake_length - 1)
+    |> lazy_unwrap(fn() { panic as "ERROR: can't find snake tail" })
+}
+
 fn snake_draw(snake: Snake) {
     case snake.body {
         [head, ..rest] -> {
@@ -141,8 +146,7 @@ fn snake_draw(snake: Snake) {
 
 fn snake_pre_draw(snake: Snake) {
     let head = snake_get_head(snake)
-    let tail = list_item_at(snake.body, snake_length - 1)
-               |> lazy_unwrap(fn() { panic as "ERROR: can't find snake tail" })
+    let tail = snake_get_tail(snake)
     move_cursor(head.x, head.y)
     print(body)
     move_cursor(tail.x, tail.y)
