@@ -10,7 +10,7 @@ import gleam/bool.{lazy_guard}
 import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
 import gleam/int.{is_odd, to_string, random}
-import gleam/list.{contains, drop, each, range, reverse, take}
+import gleam/list.{contains, drop, each, length, range, reverse, take}
 import gleam/option.{lazy_unwrap, type Option, Some, None}
 import gleam/string.{repeat}
 
@@ -91,7 +91,7 @@ fn dir_to_int(dir: SnakeDirection) -> Int {
 
 
 fn snake_get_next_random_dir(dir: SnakeDirection) -> SnakeDirection {
-    let new_dir = random(4) |> int_to_dir()
+    let new_dir = length(head_chars) |> random() |> int_to_dir()
     let disallowed_dir = dir_to_int(dir)
                          |> list_item_at(disallowed_dirs, _)
                          |> lazy_unwrap(fn() { panic as "ERROR: can't find disallowed dir" })
