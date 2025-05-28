@@ -10,21 +10,30 @@ import gleam/bool.{lazy_guard}
 import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
 import gleam/int.{is_even, to_string, random}
-import gleam/list.{drop, each, range}
+import gleam/list.{drop, each, range, reverse}
 import gleam/option.{lazy_unwrap, type Option, Some, None}
 import gleam/string.{repeat}
 
 
-type  SnakeDirection     { Up Right Down Left }
 const snake_head_chars   = ["^", ">", "v", "<"]
 const disallowed_dirs    = [Down, Left, Up, Right]
 const ascii_esc          = "\u{001b}"
 const wnd_width          = 46
 const wnd_height         = 15
+const snake_length       = 8
 const hwall              = "-"
 const vwall              = "|"
 const corner             = "+"
+const body               = "*"
 const space              = " "
+
+pub type SnakeDirection { Up Right Down Left }
+pub type Point {
+    Point(x: Int, y: Int)
+}
+pub type Snake {
+    Snake(dir: SnakeDirection, body: List(Point))
+}
 
 
 fn clear_screen() {
@@ -94,24 +103,43 @@ fn snake_get_head_char(dir: SnakeDirection) -> String {
     }
 }
 
-fn snake_move_and_draw(dir: SnakeDirection) {
-    snake_get_head_char(dir) |> print()
-    move_cursor(wnd_width - 1, wnd_height - 1)
+fn snake_init_body(body: List(Point), expected_cnt: Int) -> List(Point) {
+    use <- lazy_guard(expected_cnt == 0, fn() { reverse(body) })
+    case body {
+        []          -> [Point(wnd_width / 2, wnd_height / 2 - 1)]
+        [p, ..rest] -> [Point(p.x, p.y + 1), p, ..rest]
+    }
+    |> snake_init_body(expected_cnt - 1)
 }
 
-fn loop(cur_dir: SnakeDirection, tick: Int) {
-    move_cursor(wnd_width / 2, wnd_height / 2)
-    snake_move_and_draw(cur_dir)
-    sleep(500)
-    let new_dir = case is_even(tick) {
-        True  -> snake_get_next_random_dir(cur_dir)
-        False -> cur_dir
+fn snake_draw(snake: Snake) {
+    case snake.body {
+        [head, ..rest] -> {
+            move_cursor(head.x, head.y)
+            snake_get_head_char(snake.dir) |> print()
+            rest
+            |> each(fn(p) {
+                move_cursor(p.x, p.y)
+                print(body)
+            })
+            move_cursor(wnd_width - 1, wnd_height - 1)
+        }
+        _ -> panic as "ERROR: snake isn't initialized"
     }
-    loop(new_dir, tick + 1)
+}
+
+fn loop(snake: Snake, tick: Int) {
+    snake_draw(snake)
+    sleep(500)
+    let dir = case is_even(tick) {
+        True  -> snake_get_next_random_dir(snake.dir)
+        False -> snake.dir
+    }
+    loop(Snake(..snake, dir:), tick + 1)
 }
 
 pub fn main() {
     clear_screen()
     draw_borders()
-    loop(Up, 1)
+    loop(Snake(Up, snake_init_body([], snake_length)), 1)
 }
