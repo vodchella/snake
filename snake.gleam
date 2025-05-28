@@ -10,7 +10,7 @@ import gleam/bool.{lazy_guard}
 import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
 import gleam/int.{is_even, to_string, random}
-import gleam/list.{drop, each, range, reverse}
+import gleam/list.{drop, each, range, reverse, take}
 import gleam/option.{lazy_unwrap, type Option, Some, None}
 import gleam/string.{repeat}
 
@@ -26,6 +26,12 @@ const vwall              = "|"
 const corner             = "+"
 const body               = "*"
 const space              = " "
+const moving_rules       = [
+    Point(0, -1),
+    Point(1, 0),
+    Point(0, 1),
+    Point(-1, 0)
+]
 
 pub type SnakeDirection { Up Right Down Left }
 pub type Point {
@@ -112,6 +118,11 @@ fn snake_init_body(body: List(Point), expected_cnt: Int) -> List(Point) {
     |> snake_init_body(expected_cnt - 1)
 }
 
+fn snake_get_head(snake: Snake) -> Point {
+    list_item_at(snake.body, 0)
+    |> lazy_unwrap(fn() { panic as "ERROR: can't find snake head" })
+}
+
 fn snake_draw(snake: Snake) {
     case snake.body {
         [head, ..rest] -> {
@@ -128,7 +139,32 @@ fn snake_draw(snake: Snake) {
     }
 }
 
+fn snake_pre_draw(snake: Snake) {
+    let head = snake_get_head(snake)
+    let tail = list_item_at(snake.body, snake_length - 1)
+               |> lazy_unwrap(fn() { panic as "ERROR: can't find snake tail" })
+    move_cursor(head.x, head.y)
+    print(body)
+    move_cursor(tail.x, tail.y)
+    print(space)
+}
+
+fn snake_move(snake: Snake) {
+    let rule = dir_to_int(snake.dir)
+               |> list_item_at(moving_rules, _)
+    case rule {
+        Some(rule) -> {
+            let head = snake_get_head(snake)
+            let body = [Point(head.x + rule.x, head.y + rule.y), ..take(snake.body, snake_length - 1)]
+            Snake(..snake, body:)
+        }
+        _ -> panic as "ERROR: can't find moving rule for dir"
+    }
+}
+
 fn loop(snake: Snake, tick: Int) {
+    snake_pre_draw(snake)
+    let snake = snake_move(snake)
     snake_draw(snake)
     sleep(500)
     let dir = case is_even(tick) {
