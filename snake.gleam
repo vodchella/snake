@@ -9,23 +9,23 @@
 import gleam/bool.{lazy_guard}
 import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
-import gleam/int.{is_even, to_string, random}
-import gleam/list.{drop, each, range, reverse, take}
+import gleam/int.{is_odd, to_string, random}
+import gleam/list.{contains, drop, each, range, reverse, take}
 import gleam/option.{lazy_unwrap, type Option, Some, None}
 import gleam/string.{repeat}
 
 
-const snake_head_chars   = ["^", ">", "v", "<"]
-const disallowed_dirs    = [Down, Left, Up, Right]
 const ascii_esc          = "\u{001b}"
 const wnd_width          = 46
 const wnd_height         = 15
-const snake_length       = 8
 const hwall              = "-"
 const vwall              = "|"
 const corner             = "+"
 const body               = "*"
 const space              = " "
+const snake_length       = 8
+const head_chars         = ["^", ">", "v", "<"]
+const disallowed_dirs    = [Down, Left, Up, Right]
 const moving_rules       = [
     Point(0, -1),
     Point(1, 0),
@@ -102,7 +102,7 @@ fn snake_get_next_random_dir(dir: SnakeDirection) -> SnakeDirection {
 
 fn snake_get_head_char(dir: SnakeDirection) -> String {
     let head_char = dir_to_int(dir)
-                    |> list_item_at(snake_head_chars, _)
+                    |> list_item_at(head_chars, _)
     case head_char {
         Some(char) -> char
         None       -> panic as "ERROR: Invalid snake direction"
@@ -126,13 +126,13 @@ fn snake_get_head(snake: Snake) -> Point {
 fn snake_draw(snake: Snake) {
     case snake.body {
         [head, ..rest] -> {
-            move_cursor(head.x, head.y)
-            snake_get_head_char(snake.dir) |> print()
             rest
             |> each(fn(p) {
                 move_cursor(p.x, p.y)
                 print(body)
             })
+            move_cursor(head.x, head.y)
+            snake_get_head_char(snake.dir) |> print()
             move_cursor(wnd_width - 1, wnd_height - 1)
         }
         _ -> panic as "ERROR: snake isn't initialized"
@@ -155,10 +155,26 @@ fn snake_move(snake: Snake) {
     case rule {
         Some(rule) -> {
             let head = snake_get_head(snake)
-            let body = [Point(head.x + rule.x, head.y + rule.y), ..take(snake.body, snake_length - 1)]
+            let body = [
+                Point(head.x + rule.x, head.y + rule.y),
+                ..take(snake.body, snake_length - 1)
+            ]
             Snake(..snake, body:)
         }
         _ -> panic as "ERROR: can't find moving rule for dir"
+    }
+}
+
+fn snake_has_collisions(snake: Snake) -> Bool {
+    let head = snake_get_head(snake)
+    case head {
+        Point(_, y) if y <= 0              -> True
+        Point(_, y) if y >= wnd_height - 1 -> True
+        Point(x, _) if x <= 0              -> True
+        Point(x, _) if x >= wnd_width - 1  -> True
+        head -> snake.body
+                |> drop(1)
+                |> contains(head)
     }
 }
 
@@ -166,12 +182,21 @@ fn loop(snake: Snake, tick: Int) {
     snake_pre_draw(snake)
     let snake = snake_move(snake)
     snake_draw(snake)
-    sleep(500)
-    let dir = case is_even(tick) {
-        True  -> snake_get_next_random_dir(snake.dir)
-        False -> snake.dir
+    case snake_has_collisions(snake) {
+        False -> {
+            sleep(500)
+            let dir = case is_odd(tick) {
+                True  -> snake_get_next_random_dir(snake.dir)
+                False -> snake.dir
+            }
+            loop(Snake(..snake, dir:), tick + 1)
+        }
+        True  -> {
+            move_cursor({wnd_width / 2} - 5, wnd_height  / 2)
+            print("Game over!")
+            move_cursor(1, wnd_height)
+        }
     }
-    loop(Snake(..snake, dir:), tick + 1)
 }
 
 pub fn main() {
