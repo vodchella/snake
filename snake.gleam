@@ -18,11 +18,14 @@ import gleam/string.{repeat}
 const ascii_esc          = "\u{001b}"
 const wnd_width          = 46
 const wnd_height         = 15
-const food               = "O"
-const wall               = "X"
-const hwall              = "-"
-const vwall              = "|"
-const corner             = "+"
+const food               = "◯"
+const wall               = "╳"
+const hwall              = "═"
+const vwall              = "║"
+const tlcorner           = "╔"
+const trcorner           = "╗"
+const blcorner           = "╚"
+const brcorner           = "╝"
 const body               = "*"
 const space              = " "
 const initial_length     = 8
@@ -75,15 +78,16 @@ fn print_at(s: String, x, y: Int) {
 
 fn borders_draw() {
     let cnt = wnd_width - 2
-    let edge_row = corner <> repeat(hwall, cnt) <> corner
+    let top_row = tlcorner <> repeat(hwall, cnt) <> trcorner
+    let bottom_row = blcorner <> repeat(hwall, cnt) <> brcorner
     let middle_row = vwall <> repeat(space, cnt) <> vwall
 
-    println(edge_row)
+    println(top_row)
 
     range(1, wnd_height - 2)
     |> each(fn(_) { println(middle_row) })
 
-    println(edge_row)
+    println(bottom_row)
 }
 
 fn list_item_at(lst: List(t), i: Int) -> Option(t) {
