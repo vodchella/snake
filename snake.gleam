@@ -50,6 +50,11 @@ fn move_cursor(x, y : Int) {
     print(ascii_esc <> "[" <> to_string(y + 1) <> ";" <> to_string(x + 1) <> "H")
 }
 
+fn print_at(s: String, x, y: Int) {
+    move_cursor(x, y)
+    print(s)
+}
+
 fn draw_borders() {
     let cnt = wnd_width - 2
     let edge_row = corner <> repeat(hwall, cnt) <> corner
@@ -133,11 +138,9 @@ fn snake_draw(snake: Snake) {
         [head, ..rest] -> {
             rest
             |> each(fn(p) {
-                move_cursor(p.x, p.y)
-                print(body)
+                print_at(body, p.x, p.y)
             })
-            move_cursor(head.x, head.y)
-            snake_get_head_char(snake.dir) |> print()
+            snake_get_head_char(snake.dir) |> print_at(head.x, head.y)
             move_cursor(wnd_width - 1, wnd_height - 1)
         }
         _ -> panic as "ERROR: snake isn't initialized"
@@ -147,10 +150,8 @@ fn snake_draw(snake: Snake) {
 fn snake_pre_draw(snake: Snake) {
     let head = snake_get_head(snake)
     let tail = snake_get_tail(snake)
-    move_cursor(head.x, head.y)
-    print(body)
-    move_cursor(tail.x, tail.y)
-    print(space)
+    print_at(body, head.x, head.y)
+    print_at(space, tail.x, tail.y)
 }
 
 fn snake_move(snake: Snake) {
@@ -196,8 +197,7 @@ fn loop(snake: Snake, tick: Int) {
             loop(Snake(..snake, dir:), tick + 1)
         }
         True  -> {
-            move_cursor({wnd_width / 2} - 5, wnd_height  / 2)
-            print("Game over!")
+            print_at("Game over!", {wnd_width / 2} - 5, wnd_height  / 2)
             move_cursor(1, wnd_height)
         }
     }
