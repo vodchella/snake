@@ -18,12 +18,13 @@ import gleam/string.{repeat}
 const ascii_esc          = "\u{001b}"
 const wnd_width          = 46
 const wnd_height         = 15
+const food               = "O"
 const hwall              = "-"
 const vwall              = "|"
 const corner             = "+"
 const body               = "*"
 const space              = " "
-const snake_length       = 8
+const initial_length     = 8
 const head_chars         = ["^", ">", "v", "<"]
 const disallowed_dirs    = [Down, Left, Up, Right]
 const moving_rules       = [
@@ -38,7 +39,18 @@ pub type Point {
     Point(x: Int, y: Int)
 }
 pub type Snake {
-    Snake(dir: SnakeDirection, body: List(Point))
+    Snake(
+        dir: SnakeDirection,
+        body: List(Point),
+        len: Int,
+    )
+}
+pub type Game {
+    Game(
+        snake: Snake,
+        tick: Int,
+        food: Point,
+    )
 }
 
 
@@ -129,7 +141,7 @@ fn snake_get_head(snake: Snake) -> Point {
 }
 
 fn snake_get_tail(snake: Snake) -> Point {
-    list_item_at(snake.body, snake_length - 1)
+    list_item_at(snake.body, snake.len - 1)
     |> lazy_unwrap(fn() { panic as "ERROR: can't find snake tail" })
 }
 
@@ -162,7 +174,7 @@ fn snake_move(snake: Snake) {
             let head = snake_get_head(snake)
             let body = [
                 Point(head.x + rule.x, head.y + rule.y),
-                ..take(snake.body, snake_length - 1)
+                ..take(snake.body, snake.len - 1)
             ]
             Snake(..snake, body:)
         }
@@ -183,18 +195,37 @@ fn snake_has_collisions(snake: Snake) -> Bool {
     }
 }
 
-fn loop(snake: Snake, tick: Int) {
-    snake_pre_draw(snake)
-    let snake = snake_move(snake)
+
+fn food_gen_random(forbidden_points: List(Point)) -> Point {
+    let x = random(wnd_width - 2) + 1
+    let y = random(wnd_height - 2) + 1
+    let food = Point(x, y)
+    case contains(forbidden_points, food) {
+        False -> food
+        True  -> food_gen_random(forbidden_points)
+    }
+}
+
+fn food_draw(game: Game) {
+    print_at(food, game.food.x, game.food.y)
+}
+
+
+fn loop(game: Game) {
+    food_draw(game)
+    snake_pre_draw(game.snake)
+    let snake = snake_move(game.snake)
     snake_draw(snake)
     case snake_has_collisions(snake) {
         False -> {
             sleep(500)
-            let dir = case is_odd(tick) {
+            let dir = case is_odd(game.tick) {
                 True  -> snake_get_next_random_dir(snake.dir)
                 False -> snake.dir
             }
-            loop(Snake(..snake, dir:), tick + 1)
+            let snake = Snake(..snake, dir:, len: length(snake.body))
+            let game = Game(snake, game.tick + 1, game.food)
+            loop(game)
         }
         True  -> {
             print_at("Game over!", {wnd_width / 2} - 5, wnd_height  / 2)
@@ -206,5 +237,7 @@ fn loop(snake: Snake, tick: Int) {
 pub fn main() {
     clear_screen()
     draw_borders()
-    loop(Snake(Up, snake_init_body([], snake_length)), 1)
+    let snake = Snake(Up, snake_init_body([], initial_length), initial_length)
+    let game = Game(snake, 1, food_gen_random(snake.body))
+    loop(game)
 }
