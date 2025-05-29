@@ -10,7 +10,7 @@ import gleam/bool.{lazy_guard}
 import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
 import gleam/int.{is_odd, to_string, random}
-import gleam/list.{contains, drop, each, length, range, reverse, take}
+import gleam/list.{append, contains, drop, each, length, range, reverse, take}
 import gleam/option.{lazy_unwrap, type Option, Some, None}
 import gleam/string.{repeat}
 
@@ -19,6 +19,7 @@ const ascii_esc          = "\u{001b}"
 const wnd_width          = 46
 const wnd_height         = 15
 const food               = "O"
+const wall               = "X"
 const hwall              = "-"
 const vwall              = "|"
 const corner             = "+"
@@ -29,9 +30,9 @@ const head_chars         = ["^", ">", "v", "<"]
 const disallowed_dirs    = [Down, Left, Up, Right]
 const moving_rules       = [
     Point(0, -1),
-    Point(1, 0),
-    Point(0, 1),
-    Point(-1, 0)
+    Point(1,  0),
+    Point(0,  1),
+    Point(-1, 0),
 ]
 
 pub type SnakeDirection { Up Right Down Left }
@@ -40,34 +41,39 @@ pub type Point {
 }
 pub type Snake {
     Snake(
-        dir: SnakeDirection,
+        dir:  SnakeDirection,
         body: List(Point),
-        len: Int,
+        len:  Int,
     )
 }
 pub type Game {
     Game(
         snake: Snake,
-        tick: Int,
-        food: Point,
+        tick:  Int,
+        food:  Point,
+        walls: List(Point)
     )
 }
 
 
-fn clear_screen() {
+//
+//  Utils
+//
+
+fn screen_clear() {
     print(ascii_esc <> "[2J" <> ascii_esc <> "[H")
 }
 
-fn move_cursor(x, y : Int) {
+fn cursor_move(x, y : Int) {
     print(ascii_esc <> "[" <> to_string(y + 1) <> ";" <> to_string(x + 1) <> "H")
 }
 
 fn print_at(s: String, x, y: Int) {
-    move_cursor(x, y)
+    cursor_move(x, y)
     print(s)
 }
 
-fn draw_borders() {
+fn borders_draw() {
     let cnt = wnd_width - 2
     let edge_row = corner <> repeat(hwall, cnt) <> corner
     let middle_row = vwall <> repeat(space, cnt) <> vwall
@@ -106,6 +112,10 @@ fn dir_to_int(dir: SnakeDirection) -> Int {
     }
 }
 
+
+//
+//  Snake
+//
 
 fn snake_get_next_random_dir(dir: SnakeDirection) -> SnakeDirection {
     let new_dir = length(head_chars) |> random() |> int_to_dir()
@@ -153,7 +163,7 @@ fn snake_draw(snake: Snake) {
                 print_at(body, p.x, p.y)
             })
             snake_get_head_char(snake.dir) |> print_at(head.x, head.y)
-            move_cursor(wnd_width - 1, wnd_height - 1)
+            cursor_move(wnd_width - 1, wnd_height - 1)
         }
         _ -> panic as "ERROR: snake isn't initialized"
     }
@@ -182,19 +192,24 @@ fn snake_move(snake: Snake) {
     }
 }
 
-fn snake_has_collisions(snake: Snake) -> Bool {
-    let head = snake_get_head(snake)
+fn snake_has_collisions(game: Game) -> Bool {
+    let head = snake_get_head(game.snake)
     case head {
         Point(_, y) if y <= 0              -> True
         Point(_, y) if y >= wnd_height - 1 -> True
         Point(x, _) if x <= 0              -> True
         Point(x, _) if x >= wnd_width - 1  -> True
-        head -> snake.body
+        head -> game.snake.body
                 |> drop(1)
+                |> append(game.walls)
                 |> contains(head)
     }
 }
 
+
+//
+//  Food
+//
 
 fn food_gen_random(forbidden_points: List(Point)) -> Point {
     let x = random(wnd_width - 2) + 1
@@ -211,12 +226,42 @@ fn food_draw(game: Game) {
 }
 
 
+//
+//  Walls
+//
+
+fn walls_init() -> List(Point) {
+    [
+        // Static for now
+        Point(12, 3), Point(35, 7),
+        Point(12, 4), Point(35, 8),
+        Point(12, 5), Point(35, 9),
+        Point(12, 6), Point(35, 10),
+        Point(12, 7), Point(35, 11),
+        Point(12, 8), Point(35, 12),
+        Point(12, 9), Point(35, 13),
+
+    ]
+}
+
+fn walls_draw(game: Game) {
+    game.walls
+    |> each(fn(w) {
+        print_at(wall, w.x - 1, w.y - 1)
+    })
+}
+
+
+//
+//  Main loop
+//
+
 fn loop(game: Game) {
     food_draw(game)
     snake_pre_draw(game.snake)
     let snake = snake_move(game.snake)
     snake_draw(snake)
-    case snake_has_collisions(snake) {
+    case snake_has_collisions(game) {
         False -> {
             sleep(500)
             let dir = case is_odd(game.tick) {
@@ -224,20 +269,24 @@ fn loop(game: Game) {
                 False -> snake.dir
             }
             let snake = Snake(..snake, dir:, len: length(snake.body))
-            let game = Game(snake, game.tick + 1, game.food)
+            let game = Game(snake, game.tick + 1, game.food, game.walls)
             loop(game)
         }
         True  -> {
             print_at("Game over!", {wnd_width / 2} - 5, wnd_height  / 2)
-            move_cursor(1, wnd_height)
+            cursor_move(1, wnd_height)
         }
     }
 }
 
 pub fn main() {
-    clear_screen()
-    draw_borders()
-    let snake = Snake(Up, snake_init_body([], initial_length), initial_length)
-    let game = Game(snake, 1, food_gen_random(snake.body))
+    let walls = walls_init()
+    let snake_body = snake_init_body([], initial_length)
+    let food = append(snake_body, walls) |> food_gen_random()
+    let snake = Snake(Up, snake_body, length(snake_body))
+    let game = Game(snake, 1, food, walls)
+    screen_clear()
+    borders_draw()
+    walls_draw(game)
     loop(game)
 }
