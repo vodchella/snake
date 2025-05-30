@@ -6,15 +6,16 @@
 //
 // Run it with: gleam run
 
-import gleam/bool.{lazy_guard}
+import gleam/bool.{lazy_guard, negate}
 import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
 import gleam/int.{is_odd, to_string, random}
-import gleam/list.{append, contains, drop, each, length, range, reverse, take}
+import gleam/list.{append, contains, drop, each, filter, length, map, range, reverse, take}
 import gleam/option.{lazy_unwrap, type Option, Some, None}
 import gleam/string.{repeat}
 
 
+const max_cost           = 999_999_999_999
 const ascii_esc          = "\u{001b}"
 const wnd_width          = 46
 const wnd_height         = 15
@@ -41,6 +42,13 @@ const moving_rules       = [
 pub type SnakeDirection { Up Right Down Left }
 pub type Point {
     Point(x: Int, y: Int)
+}
+pub type Node {
+    Node(
+        point: Point,
+        cost:  Int,
+        prev:  Option(Node),
+    )
 }
 pub type Snake {
     Snake(
@@ -257,6 +265,38 @@ fn walls_draw(game: Game) {
 
 
 //
+//  Pathfinding utils
+//
+
+fn node_get_neighbors(node: Node, game: Game) {
+    let forbidden = append(game.snake.body, game.walls)
+    let p = node.point
+    [
+        Point(p.x - 1, p.y - 1), Point(p.x, p.y - 1), Point(p.x + 1, p.y - 1),
+        Point(p.x - 1, p.y),                          Point(p.x + 1, p.y),
+        Point(p.x - 1, p.y + 1), Point(p.x, p.y + 1), Point(p.x + 1, p.y + 1),
+    ]
+    |> filter(fn(p) {
+        case p.x, p.y {
+            x, _ if x < 1              -> False
+            x, _ if x > wnd_width - 2  -> False
+            _, y if y < 1              -> False
+            _, y if y > wnd_height - 2 -> False
+            _, _ -> True
+        }
+    })
+    |> filter(fn(p) { forbidden |> contains(p) |> negate })
+    |> map(fn(p) { Node(p, node.cost + 1, Some(node)) })
+}
+
+fn node_debug_draw(nodes: List(Node)) {
+    nodes |> each(fn(n) {
+        print_at(to_string(n.cost), n.point.x, n.point.y)
+    })
+}
+
+
+//
 //  Main loop
 //
 
@@ -293,4 +333,10 @@ pub fn main() {
     borders_draw()
     walls_draw(game)
     loop(game)
+
+    //let head = Point(1, 13) //snake_get_head(snake)
+    //let neighbors = node_get_neighbors(Node(head, 0, None), game)
+    //node_debug_draw(neighbors)
+    //print_at("^", head.x, head.y)
+    //cursor_move(wnd_width, wnd_height)
 }
