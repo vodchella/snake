@@ -270,12 +270,8 @@ fn walls_draw(game: Game) {
 
 fn node_get_neighbors(node: Node, game: Game) {
     let forbidden = append(game.snake.body, game.walls)
-    let p = node.point
-    [
-        Point(p.x - 1, p.y - 1), Point(p.x, p.y - 1), Point(p.x + 1, p.y - 1),
-        Point(p.x - 1, p.y),                          Point(p.x + 1, p.y),
-        Point(p.x - 1, p.y + 1), Point(p.x, p.y + 1), Point(p.x + 1, p.y + 1),
-    ]
+    moving_rules
+    |> map(fn(r) { Point(node.point.x + r.x, node.point.y + r.y) })
     |> filter(fn(p) {
         case p.x, p.y {
             x, _ if x < 1              -> False
@@ -308,13 +304,13 @@ fn node_find_path_worker(
     reachable: List(Node),
     explored: List(Node),
 ) -> List(Node) {
-    let node = list_item_at(reachable, 0)   // TODO: A* logic here
+    let node = node_choose(reachable, dst)
     case node {
         Some(node) if node.point == dst.point -> node_build_path(node, [])
         Some(node) -> {
             let explored = [node, ..explored]
             let forbidden = explored |> map(fn(f) { f.point })
-            let new_reachable = reachable
+            reachable
             |> append(node_get_neighbors(node, game))
             |> filter(fn(rn) {
                 forbidden
@@ -332,6 +328,10 @@ fn node_find_path_worker(
         }
         _ -> []  // Can't find the path
     }
+}
+
+fn node_choose(nodes: List(Node), _dst: Node) -> Option(Node) {
+    list_item_at(nodes, 0)   // TODO: A* logic here
 }
 
 fn node_build_path(node: Node, acc: List(Node)) -> List(Node) {
@@ -381,10 +381,13 @@ pub fn main() {
     walls_draw(game)
     // loop(game)
 
-    let head = Point(1, 13) //snake_get_head(snake)
+    //let head = Point(1, 13)
+    //let head = Point(9, 7)  // Not optimal
+    //let head = Point(29, 10)  // Not optimal
+    let head = Point(39, 10)
     let target = Point(14, 7)
-    let path = node_find_path(Node(head, 0, None), Node(target, 0, None), game)
-    node_debug_draw(path)
+    let nodes = node_find_path(Node(head, 0, None), Node(target, 0, None), game)
+    node_debug_draw(nodes)
     print_at("^", head.x, head.y)
     print_at("X", target.x, target.y)
     cursor_move(wnd_width, wnd_height)
