@@ -286,14 +286,61 @@ fn node_get_neighbors(node: Node, game: Game) {
         }
     })
     |> filter(fn(p) { forbidden |> contains(p) |> negate })
-    |> map(fn(p) { Node(p, node.cost + 1, Some(node)) })
+    |> map(fn(p) { Node(p, max_cost, None) })
 }
 
 fn node_debug_draw(nodes: List(Node)) {
     nodes |> each(fn(n) {
-        print_at(to_string(n.cost), n.point.x, n.point.y)
+        print_at(".", n.point.x, n.point.y)
     })
 }
+
+fn node_find_path(src: Node, dst: Node, game: Game) -> List(Node) {
+    let reachable = [src]
+    let explored = []
+    node_find_path_worker(src, dst, game, reachable, explored)
+}
+
+fn node_find_path_worker(
+    src: Node,
+    dst: Node,
+    game: Game,
+    reachable: List(Node),
+    explored: List(Node),
+) -> List(Node) {
+    let node = list_item_at(reachable, 0)   // TODO: A* logic here
+    case node {
+        Some(node) if node.point == dst.point -> node_build_path(node, [])
+        Some(node) -> {
+            let explored = [node, ..explored]
+            let forbidden = explored |> map(fn(f) { f.point })
+            let new_reachable = reachable
+            |> append(node_get_neighbors(node, game))
+            |> filter(fn(rn) {
+                forbidden
+                |> contains(rn.point)
+                |> negate
+            })
+            |> map(fn(rn) {
+                let new_cost = node.cost + 1
+                case rn.cost {
+                    cost if cost > new_cost -> Node(rn.point, new_cost, Some(node))
+                    _ -> rn
+                }
+            })
+            |> node_find_path_worker(src, dst, game, _, explored)
+        }
+        _ -> []  // Can't find the path
+    }
+}
+
+fn node_build_path(node: Node, acc: List(Node)) -> List(Node) {
+    case node.prev {
+        Some(prev) -> node_build_path(prev, [node, ..acc])
+        None       -> acc
+    }
+}
+
 
 
 //
@@ -332,11 +379,13 @@ pub fn main() {
     screen_clear()
     borders_draw()
     walls_draw(game)
-    loop(game)
+    // loop(game)
 
-    //let head = Point(1, 13) //snake_get_head(snake)
-    //let neighbors = node_get_neighbors(Node(head, 0, None), game)
-    //node_debug_draw(neighbors)
-    //print_at("^", head.x, head.y)
-    //cursor_move(wnd_width, wnd_height)
+    let head = Point(1, 13) //snake_get_head(snake)
+    let target = Point(14, 7)
+    let path = node_find_path(Node(head, 0, None), Node(target, 0, None), game)
+    node_debug_draw(path)
+    print_at("^", head.x, head.y)
+    print_at("X", target.x, target.y)
+    cursor_move(wnd_width, wnd_height)
 }
