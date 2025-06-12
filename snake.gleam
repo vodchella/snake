@@ -61,7 +61,6 @@ pub type Snake {
 pub type Game {
     Game(
         snake: Snake,
-        tick:  Int,
         food:  Point,
         walls: List(Point)
     )
@@ -159,7 +158,7 @@ fn snake_get_head_char(dir: SnakeDirection) -> String {
 fn snake_init_body(body: List(Point), expected_cnt: Int) -> List(Point) {
     use <- lazy_guard(expected_cnt == 0, fn() { reverse(body) })
     case body {
-        []          -> [Point(wnd_width / 2, wnd_height / 2 - 1)]
+        []          -> [Point(wnd_width / 2 - 6, wnd_height / 2 - 1)]
         [p, ..rest] -> [Point(p.x, p.y + 1), p, ..rest]
     }
     |> snake_init_body(expected_cnt - 1)
@@ -303,12 +302,6 @@ fn node_get_neighbors(node: Node, game: Game) {
     |> map(fn(p) { Node(p, infinity, None) })
 }
 
-// fn node_debug_draw(nodes: List(Node)) {
-//     nodes |> each(fn(n) {
-//         print_at(".", n.point.x, n.point.y)
-//     })
-// }
-
 fn node_find_path(src: Node, dst: Node, game: Game) -> List(Node) {
     let reachable = [src]
     let explored = []
@@ -381,15 +374,21 @@ fn loop(game: Game) {
             sleep(500)
             let dir = snake_get_next_dir(game, snake)
             let snake = Snake(..snake, dir:, len: length(snake.body))
-
             let head = snake_get_head(snake)
-            let food = case head {
-                h if h == game.food -> append(snake.body, game.walls) |> food_gen_random()
-                _ -> game.food
+            case head {
+                h if h == game.food -> {
+                    let food = append(snake.body, game.walls) |> food_gen_random()
+                    let game = Game(snake, food, game.walls)
+                    let dir = snake_get_next_dir(game, snake)
+                    let snake = Snake(..snake, dir:, len: length(snake.body))
+                    let game = Game(snake, food, game.walls)
+                    loop(game)
+                }
+                _ -> {
+                    let game = Game(snake, game.food, game.walls)
+                    loop(game)
+                }
             }
-            let game = Game(snake, game.tick + 1, food, game.walls)
-
-            loop(game)
         }
         True  -> {
             print_at("Game over!", {wnd_width / 2} - 5, wnd_height  / 2)
@@ -401,21 +400,11 @@ fn loop(game: Game) {
 pub fn main() {
     let walls = walls_init()
     let snake_body = snake_init_body([], initial_length)
-    // let food = append(snake_body, walls) |> food_gen_random()
     let food = Point(13, 7)
     let snake = Snake(Up, snake_body, length(snake_body))
-    let game = Game(snake, 1, food, walls)
+    let game = Game(snake, food, walls)
     screen_clear()
     borders_draw()
     walls_draw(game)
     loop(game)
-
-    // let head = snake_get_head(snake)
-    // let target = food
-    // let nodes = node_find_path(Node(head, 0, None), Node(target, 0, None), game)
-    // node_debug_draw(nodes)
-    // print_at("^", head.x, head.y)
-    // print_at("X", target.x, target.y)
-    // echo snake_get_next_dir(game)
-    // cursor_move(wnd_width, wnd_height)
 }
