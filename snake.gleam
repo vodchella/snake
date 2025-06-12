@@ -8,12 +8,10 @@
 
 import gleam/bool.{lazy_guard, negate}
 import gleam/erlang/process.{sleep}
-import gleam/float.{square_root}
 import gleam/io.{print, println}
-import gleam/int.{is_odd, to_float, to_string, random}
-import gleam/list.{append, contains, drop, each, filter, length, map, max, range, reverse, take}
+import gleam/int.{to_string, random}
+import gleam/list.{append, contains, drop, each, filter, first, index_map, last, length, map, range, reverse, take}
 import gleam/option.{lazy_unwrap, type Option, Some, None}
-import gleam/order.{Gt, Eq}
 import gleam/result
 import gleam/string.{repeat}
 
@@ -33,8 +31,8 @@ const brcorner           = "╝"
 const body               = "*"
 const space              = " "
 const initial_length     = 8
-const head_chars         = ["^", ">", "v", "<"]
-const disallowed_dirs    = [Down, Left, Up, Right]
+const head_chars         = [ "^",  ">",   "v",  "<" ]
+const moving_dirs        = [ Up,   Right, Down, Left ]
 const moving_rules       = [
     Point(0, -1),
     Point(1,  0),
@@ -108,16 +106,6 @@ fn list_item_at(lst: List(t), i: Int) -> Option(t) {
     }
 }
 
-fn int_to_dir(index: Int) -> SnakeDirection {
-    case index {
-        0 -> Up
-        1 -> Right
-        2 -> Down
-        3 -> Left
-        _ -> panic as "ERROR: Invalid snake direction index"
-    }
-}
-
 fn dir_to_int(dir: SnakeDirection) -> Int {
     case dir {
         Up    -> 0
@@ -127,28 +115,36 @@ fn dir_to_int(dir: SnakeDirection) -> Int {
     }
 }
 
-fn get_distance(p1: Point, p2: Point) -> Float {
-    let Point(x1, y1) = p1
-    let Point(x2, y2) = p2
-    let dx = to_float(x2 - x1)
-    let dy = to_float(y2 - y1)
-    square_root(dx *. dx +. dy *. dy)
-    |> result.lazy_unwrap(fn() { panic as "ERROR: sqrt fucked up" })
-}
-
 
 //
 //  Snake
 //
 
-fn snake_get_next_random_dir(dir: SnakeDirection) -> SnakeDirection {
-    let new_dir = length(head_chars) |> random() |> int_to_dir()
-    let disallowed_dir = dir_to_int(dir)
-                         |> list_item_at(disallowed_dirs, _)
-                         |> lazy_unwrap(fn() { panic as "ERROR: can't find disallowed dir" })
-    use <- lazy_guard(when: new_dir == disallowed_dir,
-                      return: fn() { snake_get_next_random_dir(dir) })
-    new_dir
+fn snake_get_next_dir(game: Game, new_snake: Snake) -> SnakeDirection {
+    let head = snake_get_head(new_snake)
+    let path_to_food = node_find_path(Node(head, 0, None), Node(game.food, 0, None), game)
+    case path_to_food {
+        [] -> new_snake.dir
+        path  -> {
+            let next_node = path
+            |> first()
+            |> result.lazy_unwrap(fn() { panic as "ERROR: unreachable code" })
+
+            let rule = case next_node.point {
+                Point(x, y) -> Point(x - head.x, y - head.y)
+            }
+
+            let dir_index = moving_rules
+            |> index_map(fn(p, i) { #(i, p) })
+            |> filter(fn(t) { t.1 == rule })
+            |> map(fn(t) { t.0 })
+            |> first()
+            |> result.lazy_unwrap(fn() { panic as "ERROR: can't find dir index" })
+
+            list_item_at(moving_dirs, dir_index)
+            |> lazy_unwrap(fn() { panic as "ERROR: can't find dir" })
+        }
+    }
 }
 
 fn snake_get_head_char(dir: SnakeDirection) -> String {
@@ -170,13 +166,15 @@ fn snake_init_body(body: List(Point), expected_cnt: Int) -> List(Point) {
 }
 
 fn snake_get_head(snake: Snake) -> Point {
-    list_item_at(snake.body, 0)
-    |> lazy_unwrap(fn() { panic as "ERROR: can't find snake head" })
+    snake.body
+    |> first()
+    |> result.lazy_unwrap(fn() { panic as "ERROR: can't find snake head" })
 }
 
 fn snake_get_tail(snake: Snake) -> Point {
-    list_item_at(snake.body, snake.len - 1)
-    |> lazy_unwrap(fn() { panic as "ERROR: can't find snake tail" })
+    snake.body
+    |> last()
+    |> result.lazy_unwrap(fn() { panic as "ERROR: can't find snake tail" })
 }
 
 fn snake_draw(snake: Snake) {
@@ -305,11 +303,11 @@ fn node_get_neighbors(node: Node, game: Game) {
     |> map(fn(p) { Node(p, infinity, None) })
 }
 
-fn node_debug_draw(nodes: List(Node)) {
-    nodes |> each(fn(n) {
-        print_at(".", n.point.x, n.point.y)
-    })
-}
+// fn node_debug_draw(nodes: List(Node)) {
+//     nodes |> each(fn(n) {
+//         print_at(".", n.point.x, n.point.y)
+//     })
+// }
 
 fn node_find_path(src: Node, dst: Node, game: Game) -> List(Node) {
     let reachable = [src]
@@ -330,7 +328,7 @@ fn node_find_path_worker(
         Some(node) -> {
             let explored = [node, ..explored]
             let forbidden = explored |> map(fn(f) { f.point })
-            let new_reachable = reachable
+            reachable
             |> append(node_get_neighbors(node, game))
             |> filter(fn(rn) {
                 forbidden
@@ -352,25 +350,11 @@ fn node_find_path_worker(
     }
 }
 
-fn node_choose(nodes: List(Node), dst: Node) -> Option(Node) {
-    list_item_at(nodes, 0)   // TODO: A* logic here
-}
-
-fn node_choose_test(nodes: List(Node), dst: Node) -> Option(Node) {
-    let best_tuple = nodes
-    |> map(fn(n) { #(n, get_distance(n.point, dst.point) +. to_float(n.cost)) })
-    |> max(fn(t1, t2) {
-        let #(n1, d1) = t1
-        let #(n2, d2) = t2
-        case d1 <. d2 {
-            // d1 is less, but return Gt!
-            True  -> Gt
-            False -> Eq
-        }
-    })
-    case best_tuple {
-        Ok(#(node, _)) -> Some(node)
-        _ -> None
+fn node_choose(nodes: List(Node), _dst: Node) -> Option(Node) {
+    let item = nodes |> first()
+    case item {
+        Ok(i)    -> Some(i)
+        Error(_) -> None
     }
 }
 
@@ -395,12 +379,16 @@ fn loop(game: Game) {
     case snake_has_collisions(game) {
         False -> {
             sleep(500)
-            let dir = case is_odd(game.tick) {
-                True  -> snake_get_next_random_dir(snake.dir)
-                False -> snake.dir
-            }
+            let dir = snake_get_next_dir(game, snake)
             let snake = Snake(..snake, dir:, len: length(snake.body))
-            let game = Game(snake, game.tick + 1, game.food, game.walls)
+
+            let head = snake_get_head(snake)
+            let food = case head {
+                h if h == game.food -> append(snake.body, game.walls) |> food_gen_random()
+                _ -> game.food
+            }
+            let game = Game(snake, game.tick + 1, food, game.walls)
+
             loop(game)
         }
         True  -> {
@@ -412,37 +400,22 @@ fn loop(game: Game) {
 
 pub fn main() {
     let walls = walls_init()
-    // let snake_body = snake_init_body([], initial_length)
-    let snake_body = []
+    let snake_body = snake_init_body([], initial_length)
     // let food = append(snake_body, walls) |> food_gen_random()
-    let food = append(snake_body, walls) |> food_gen_random()
+    let food = Point(13, 7)
     let snake = Snake(Up, snake_body, length(snake_body))
     let game = Game(snake, 1, food, walls)
     screen_clear()
     borders_draw()
     walls_draw(game)
-    // loop(game)
+    loop(game)
 
-    // let test_nodes = [
-    //     Node(Point(2,  2), 0, None),
-    //     Node(Point(5, 10), 0, None),
-    //     Node(Point(2, 12), 0, None),
-    // ]
-    // let dst = Node(Point(4,  12), 0, None)
-    // node_debug_draw(test_nodes)
-    // print_at("C", dst.point.x, dst.point.y)
-    // echo node_choose_test(test_nodes, dst)
-
-    //let head = Point(1, 13)
-    //let head = Point(9, 7)  // Not optimal
-    //let head = Point(29, 10)  // Not optimal
-
-    let head = Point(39, 10)
-    let target = Point(13, 7)
-    let nodes = node_find_path(Node(head, 0, None), Node(target, 0, None), game)
-    node_debug_draw(nodes)
-    print_at("^", head.x, head.y)
-    print_at("X", target.x, target.y)
-
-    cursor_move(wnd_width, wnd_height)
+    // let head = snake_get_head(snake)
+    // let target = food
+    // let nodes = node_find_path(Node(head, 0, None), Node(target, 0, None), game)
+    // node_debug_draw(nodes)
+    // print_at("^", head.x, head.y)
+    // print_at("X", target.x, target.y)
+    // echo snake_get_next_dir(game)
+    // cursor_move(wnd_width, wnd_height)
 }
