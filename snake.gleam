@@ -257,13 +257,14 @@ fn food_draw(game: Game) {
 fn walls_init() -> List(Point) {
     [
         // Static for now
-        Point(12, 3), Point(35, 7),
-        Point(12, 4), Point(35, 8),
-        Point(12, 5), Point(35, 9),
-        Point(12, 6), Point(35, 10),
-        Point(12, 7), Point(35, 11),
-        Point(12, 8), Point(35, 12),
-        Point(12, 9), Point(35, 13),
+
+        Point(12, 3), Point(35, 6),
+        Point(12, 4), Point(35, 7),
+        Point(12, 5), Point(35, 8),
+        Point(12, 6), Point(35, 9),
+        Point(12, 7), Point(35, 10),
+        Point(12, 8), Point(35, 11),
+        Point(12, 9), Point(35, 12),
 
         Point(14, 3),
         Point(14, 4),
@@ -278,7 +279,7 @@ fn walls_init() -> List(Point) {
 fn walls_draw(game: Game) {
     game.walls
     |> each(fn(w) {
-        print_at(wall, w.x - 1, w.y - 1)
+        print_at(wall, w.x, w.y)
     })
 }
 
@@ -316,42 +317,6 @@ fn node_find_path(src: Node, dst: Node, game: Game) -> List(Node) {
     node_find_path_worker(src, dst, game, reachable, explored)
 }
 
-// fn node_find_path_worker(
-//     src: Node,
-//     dst: Node,
-//     game: Game,
-//     reachable: List(Node),
-//     explored: List(Node),
-// ) -> List(Node) {
-//     let node = node_choose(reachable, dst)
-//     case node {
-//         Some(node) if node.point == dst.point -> node_build_path(node, [])
-//         Some(node) -> {
-//             let explored = [node, ..explored]
-//             let forbidden = explored |> map(fn(f) { f.point })
-//             let new_reachable = reachable
-//             |> append(node_get_neighbors(node, game))
-//             |> filter(fn(rn) {
-//                 forbidden
-//                 |> contains(rn.point)
-//                 |> negate
-//             })
-//             |> map(fn(rn) {
-//                 let new_cost = node.cost + 1
-//                 case rn.cost {
-//                     cost if cost > new_cost -> Node(rn.point, new_cost, Some(node))
-//                     _ -> rn
-//                 }
-//             })
-//             node_find_path_worker(src, dst, game, _, explored)
-//         }
-//         _ -> {
-//             echo reachable
-//             panic
-//         }//[]  // Can't find the path
-//     }
-// }
-
 fn node_find_path_worker(
     src: Node,
     dst: Node,
@@ -364,22 +329,12 @@ fn node_find_path_worker(
         Some(node) if node.point == dst.point -> node_build_path(node, [])
         Some(node) -> {
             let explored = [node, ..explored]
-
-            let new_reachable = node_get_neighbors(node, game)
+            let forbidden = explored |> map(fn(f) { f.point })
+            let new_reachable = reachable
+            |> append(node_get_neighbors(node, game))
             |> filter(fn(rn) {
-                explored
-                |> map(fn(f) { f.point })
+                forbidden
                 |> contains(rn.point)
-                |> negate
-            })
-
-
-            
-            let appendable = new_reachable
-            |> filter(fn(n) {
-                reachable
-                |> map(fn(f) { f.point })
-                |> contains(n.point)
                 |> negate
             })
             |> map(fn(rn) {
@@ -389,14 +344,11 @@ fn node_find_path_worker(
                     _ -> rn
                 }
             })
-            // echo length(reachable)
-
-            node_find_path_worker(src, dst, game, append(appendable, reachable), explored)
+            |> node_find_path_worker(src, dst, game, _, explored)
         }
         _ -> {
-            echo reachable
-            panic
-        }//[]  // Can't find the path
+            panic as "Target unreacheable"
+        }
     }
 }
 
@@ -486,7 +438,7 @@ pub fn main() {
     //let head = Point(29, 10)  // Not optimal
 
     let head = Point(39, 10)
-    let target = Point(15, 7)
+    let target = Point(13, 7)
     let nodes = node_find_path(Node(head, 0, None), Node(target, 0, None), game)
     node_debug_draw(nodes)
     print_at("^", head.x, head.y)
