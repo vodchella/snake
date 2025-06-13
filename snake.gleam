@@ -2,7 +2,7 @@
 // 
 //     [dependencies]
 //     gleam_stdlib = ">= 0.44.0 and < 2.0.0"
-//     gleam_erlang = ">= 0.34.0 and < 1.0.0"
+//     gleam_erlang = ">= 1.0.0 and < 2.0.0"
 //
 // Run it with: gleam run
 
@@ -11,7 +11,7 @@ import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
 import gleam/int.{to_string, random}
 import gleam/list.{append, contains, drop, each, filter, first, index_map, last, length, map, range, reverse, take}
-import gleam/option.{type Option, Some, None}
+import gleam/option.{from_result, type Option, Some, None}
 import gleam/string.{repeat}
 
 
@@ -104,13 +104,6 @@ fn list_item_at(lst: List(t), i: Int) -> Option(t) {
     }
 }
 
-fn result_to_option(result: Result(r, e)) -> Option(r) {
-    case result {
-        Ok(r)    -> Some(r)
-        Error(_) -> None
-    }
-}
-
 fn dir_to_int(dir: SnakeDirection) -> Int {
     case dir {
         Up    -> 0
@@ -124,6 +117,11 @@ fn dir_to_int(dir: SnakeDirection) -> Int {
 //
 //  Snake
 //
+
+fn snake_choose_and_set_next_dir(game: Game, snake: Snake) -> Snake {
+    let dir = snake_get_next_dir(game, snake)
+    Snake(..snake, dir:, len: length(snake.body))
+}
 
 fn snake_get_next_dir(game: Game, new_snake: Snake) -> SnakeDirection {
     let head = snake_get_head(new_snake)
@@ -231,6 +229,11 @@ fn snake_has_collisions(game: Game) -> Bool {
 //
 //  Food
 //
+
+fn food_renew(game: Game) -> Game {
+    let food = append(game.snake.body, game.walls) |> food_gen_random()
+    Game(..game, food:)
+}
 
 fn food_gen_random(forbidden_points: List(Point)) -> Point {
     let x = random(wnd_width - 2) + 1
@@ -344,7 +347,7 @@ fn node_find_path_worker(
 }
 
 fn node_choose(nodes: List(Node), _dst: Node) -> Option(Node) {
-    nodes |> first() |> result_to_option()
+    nodes |> first() |> from_result()
 }
 
 fn node_build_path(node: Node, acc: List(Node)) -> List(Node) {
@@ -354,6 +357,20 @@ fn node_build_path(node: Node, acc: List(Node)) -> List(Node) {
     }
 }
 
+
+//
+//  Game
+//
+
+fn game_over() {
+    print_at("Game over!", {wnd_width / 2} - 5, wnd_height  / 2)
+        cursor_move(1, wnd_height)
+}
+
+fn game_next_tick(game: Game, snake: Snake) -> Game {
+    let snake = snake_choose_and_set_next_dir(game, snake)
+    Game(..game, snake:)
+}
 
 
 //
@@ -366,29 +383,18 @@ fn loop(game: Game) {
     let snake = snake_move(game.snake)
     snake_draw(snake)
     case snake_has_collisions(game) {
+        True  -> game_over()
         False -> {
             sleep(500)
-            let dir = snake_get_next_dir(game, snake)
-            let snake = Snake(..snake, dir:, len: length(snake.body))
-            let head = snake_get_head(snake)
-            case head {
-                h if h == game.food -> {
-                    let food = append(snake.body, game.walls) |> food_gen_random()
-                    let game = Game(snake, food, game.walls)
-                    let dir = snake_get_next_dir(game, snake)
-                    let snake = Snake(..snake, dir:, len: length(snake.body))
-                    let game = Game(snake, food, game.walls)
-                    loop(game)
+            case snake_get_head(snake) {
+                head if head == game.food -> {
+                    food_renew(game)
+                    |> game_next_tick(snake)
+                    |> loop()
                 }
-                _ -> {
-                    let game = Game(snake, game.food, game.walls)
-                    loop(game)
-                }
+                _ -> game_next_tick(game, snake)
+                     |> loop()
             }
-        }
-        True  -> {
-            print_at("Game over!", {wnd_width / 2} - 5, wnd_height  / 2)
-            cursor_move(1, wnd_height)
         }
     }
 }
