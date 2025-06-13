@@ -11,8 +11,7 @@ import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
 import gleam/int.{to_string, random}
 import gleam/list.{append, contains, drop, each, filter, first, index_map, last, length, map, range, reverse, take}
-import gleam/option.{lazy_unwrap, type Option, Some, None}
-import gleam/result
+import gleam/option.{type Option, Some, None}
 import gleam/string.{repeat}
 
 
@@ -20,7 +19,7 @@ const infinity           = 999_999_999_999
 const ascii_esc          = "\u{001b}"
 const wnd_width          = 46
 const wnd_height         = 15
-const food               = "◯"
+const food               = "O"
 const wall               = "╳"
 const hwall              = "═"
 const vwall              = "║"
@@ -105,6 +104,13 @@ fn list_item_at(lst: List(t), i: Int) -> Option(t) {
     }
 }
 
+fn result_to_option(result: Result(r, e)) -> Option(r) {
+    case result {
+        Ok(r)    -> Some(r)
+        Error(_) -> None
+    }
+}
+
 fn dir_to_int(dir: SnakeDirection) -> Int {
     case dir {
         Up    -> 0
@@ -125,23 +131,19 @@ fn snake_get_next_dir(game: Game, new_snake: Snake) -> SnakeDirection {
     case path_to_food {
         [] -> new_snake.dir
         path  -> {
-            let next_node = path
-            |> first()
-            |> result.lazy_unwrap(fn() { panic as "ERROR: unreachable code" })
-
+            let assert Ok(next_node) = path |> first()
             let rule = case next_node.point {
                 Point(x, y) -> Point(x - head.x, y - head.y)
             }
 
-            let dir_index = moving_rules
+            let assert Ok(dir_index) = moving_rules
             |> index_map(fn(p, i) { #(i, p) })
             |> filter(fn(t) { t.1 == rule })
             |> map(fn(t) { t.0 })
             |> first()
-            |> result.lazy_unwrap(fn() { panic as "ERROR: can't find dir index" })
 
-            list_item_at(moving_dirs, dir_index)
-            |> lazy_unwrap(fn() { panic as "ERROR: can't find dir" })
+            let assert Some(dir) = list_item_at(moving_dirs, dir_index)
+            dir
         }
     }
 }
@@ -165,15 +167,13 @@ fn snake_init_body(body: List(Point), expected_cnt: Int) -> List(Point) {
 }
 
 fn snake_get_head(snake: Snake) -> Point {
-    snake.body
-    |> first()
-    |> result.lazy_unwrap(fn() { panic as "ERROR: can't find snake head" })
+    let assert Ok(head) = snake.body |> first()
+    head
 }
 
 fn snake_get_tail(snake: Snake) -> Point {
-    snake.body
-    |> last()
-    |> result.lazy_unwrap(fn() { panic as "ERROR: can't find snake tail" })
+    let assert Ok(tail) = snake.body |> last()
+    tail
 }
 
 fn snake_draw(snake: Snake) {
@@ -344,11 +344,7 @@ fn node_find_path_worker(
 }
 
 fn node_choose(nodes: List(Node), _dst: Node) -> Option(Node) {
-    let item = nodes |> first()
-    case item {
-        Ok(i)    -> Some(i)
-        Error(_) -> None
-    }
+    nodes |> first() |> result_to_option()
 }
 
 fn node_build_path(node: Node, acc: List(Node)) -> List(Node) {
