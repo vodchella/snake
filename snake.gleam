@@ -120,16 +120,18 @@ fn dir_to_int(dir: SnakeDirection) -> Int {
 
 fn snake_choose_and_set_next_dir(game: Game, snake: Snake) -> Snake {
     let dir = snake_get_next_dir(game, snake)
-    Snake(..snake, dir:, len: length(snake.body))
+    Snake(..snake, dir:)
 }
 
 fn snake_get_next_dir(game: Game, new_snake: Snake) -> SnakeDirection {
     let head = snake_get_head(new_snake)
-    let path_to_food = node_find_path(Node(head, 0, None), Node(game.food, 0, None), game)
+    let path_to_food = node_find_path(node(head), node(game.food), game)
     case path_to_food {
         [] -> new_snake.dir
         path  -> {
-            let assert Ok(next_node) = path |> first()
+            let assert Ok(next_node) = path
+            |> first()
+
             let rule = case next_node.point {
                 Point(x, y) -> Point(x - head.x, y - head.y)
             }
@@ -147,12 +149,9 @@ fn snake_get_next_dir(game: Game, new_snake: Snake) -> SnakeDirection {
 }
 
 fn snake_get_head_char(dir: SnakeDirection) -> String {
-    let head_char = dir_to_int(dir)
-                    |> list_item_at(head_chars, _)
-    case head_char {
-        Some(char) -> char
-        None       -> panic as "ERROR: Invalid snake direction"
-    }
+    let assert Some(head_char) = dir_to_int(dir)
+    |> list_item_at(head_chars, _)
+    head_char
 }
 
 fn snake_init_body(body: List(Point), expected_cnt: Int) -> List(Point) {
@@ -165,12 +164,14 @@ fn snake_init_body(body: List(Point), expected_cnt: Int) -> List(Point) {
 }
 
 fn snake_get_head(snake: Snake) -> Point {
-    let assert Ok(head) = snake.body |> first()
+    let assert Ok(head) = snake.body
+    |> first()
     head
 }
 
 fn snake_get_tail(snake: Snake) -> Point {
-    let assert Ok(tail) = snake.body |> last()
+    let assert Ok(tail) = snake.body
+    |> last()
     tail
 }
 
@@ -181,7 +182,10 @@ fn snake_draw(snake: Snake) {
             |> each(fn(p) {
                 print_at(body, p.x, p.y)
             })
-            snake_get_head_char(snake.dir) |> print_at(head.x, head.y)
+
+            snake_get_head_char(snake.dir)
+            |> print_at(head.x, head.y)
+
             cursor_move(wnd_width - 1, wnd_height - 1)
         }
         _ -> panic as "ERROR: snake isn't initialized"
@@ -195,20 +199,15 @@ fn snake_pre_draw(snake: Snake) {
     print_at(space, tail.x, tail.y)
 }
 
-fn snake_move(snake: Snake) {
-    let rule = dir_to_int(snake.dir)
-               |> list_item_at(moving_rules, _)
-    case rule {
-        Some(rule) -> {
-            let head = snake_get_head(snake)
-            let body = [
-                Point(head.x + rule.x, head.y + rule.y),
-                ..take(snake.body, snake.len - 1)
-            ]
-            Snake(..snake, body:)
-        }
-        _ -> panic as "ERROR: can't find moving rule for dir"
-    }
+fn snake_move(snake: Snake) -> Snake {
+    let assert Some(rule) = dir_to_int(snake.dir)
+    |> list_item_at(moving_rules, _)
+    let head = snake_get_head(snake)
+    let body = [
+        Point(head.x + rule.x, head.y + rule.y),
+        ..take(snake.body, snake.len - 1)
+    ]
+    Snake(..snake, body:)
 }
 
 fn snake_has_collisions(game: Game) -> Bool {
@@ -218,10 +217,11 @@ fn snake_has_collisions(game: Game) -> Bool {
         Point(_, y) if y >= wnd_height - 1 -> True
         Point(x, _) if x <= 0              -> True
         Point(x, _) if x >= wnd_width - 1  -> True
+
         head -> game.snake.body
-                |> drop(1)
-                |> append(game.walls)
-                |> contains(head)
+        |> drop(1)
+        |> append(game.walls)
+        |> contains(head)
     }
 }
 
@@ -231,7 +231,8 @@ fn snake_has_collisions(game: Game) -> Bool {
 //
 
 fn food_renew(game: Game) -> Game {
-    let food = append(game.snake.body, game.walls) |> food_gen_random()
+    let food = game_get_forbidden_points(game)
+    |> food_gen_random()
     Game(..game, food:)
 }
 
@@ -256,23 +257,13 @@ fn food_draw(game: Game) {
 
 fn walls_init() -> List(Point) {
     [
-        // Static for now
-
-        Point(12, 3), Point(35, 6),
-        Point(12, 4), Point(35, 7),
-        Point(12, 5), Point(35, 8),
-        Point(12, 6), Point(35, 9),
-        Point(12, 7), Point(35, 10),
-        Point(12, 8), Point(35, 11),
-        Point(12, 9), Point(35, 12),
-
-        Point(14, 3),
-        Point(14, 4),
-        Point(14, 5),
-        Point(14, 6),
-        Point(14, 7),
-        Point(14, 8),
-        Point(14, 9),
+        Point(12, 3), Point(14, 3), Point(35, 6),
+        Point(12, 4), Point(14, 4), Point(35, 7),
+        Point(12, 5), Point(14, 5), Point(35, 8),
+        Point(12, 6), Point(14, 6), Point(35, 9),
+        Point(12, 7), Point(14, 7), Point(35, 10),
+        Point(12, 8), Point(14, 8), Point(35, 11),
+        Point(12, 9), Point(14, 9), Point(35, 12),
     ]
 }
 
@@ -288,8 +279,12 @@ fn walls_draw(game: Game) {
 //  Pathfinding utils
 //
 
+fn node(point: Point) -> Node {
+    Node(point, 0, None)
+}
+
 fn node_get_neighbors(node: Node, game: Game) {
-    let forbidden = append(game.snake.body, game.walls)
+    let forbidden = game_get_forbidden_points(game)
     moving_rules
     |> map(fn(r) { Point(node.point.x + r.x, node.point.y + r.y) })
     |> filter(fn(p) {
@@ -301,7 +296,11 @@ fn node_get_neighbors(node: Node, game: Game) {
             _, _ -> True
         }
     })
-    |> filter(fn(p) { forbidden |> contains(p) |> negate })
+    |> filter(fn(p) {
+        forbidden
+        |> contains(p)
+        |> negate
+    })
     |> map(fn(p) { Node(p, infinity, None) })
 }
 
@@ -323,7 +322,9 @@ fn node_find_path_worker(
         Some(node) if node.point == dst.point -> node_build_path(node, [])
         Some(node) -> {
             let explored = [node, ..explored]
-            let forbidden = explored |> map(fn(f) { f.point })
+            let forbidden = explored
+            |> map(fn(f) { f.point })
+
             reachable
             |> append(node_get_neighbors(node, game))
             |> filter(fn(rn) {
@@ -341,13 +342,16 @@ fn node_find_path_worker(
             |> node_find_path_worker(src, dst, game, _, explored)
         }
         _ -> {
-            panic as "Target unreacheable"
+            game_over()
+            panic as "game over"
         }
     }
 }
 
 fn node_choose(nodes: List(Node), _dst: Node) -> Option(Node) {
-    nodes |> first() |> from_result()
+    nodes
+    |> first()
+    |> from_result()
 }
 
 fn node_build_path(node: Node, acc: List(Node)) -> List(Node) {
@@ -364,12 +368,16 @@ fn node_build_path(node: Node, acc: List(Node)) -> List(Node) {
 
 fn game_over() {
     print_at("Game over!", {wnd_width / 2} - 5, wnd_height  / 2)
-        cursor_move(1, wnd_height)
+    cursor_move(1, wnd_height)
 }
 
 fn game_next_tick(game: Game, snake: Snake) -> Game {
     let snake = snake_choose_and_set_next_dir(game, snake)
     Game(..game, snake:)
+}
+
+fn game_get_forbidden_points(game: Game) -> List(Point) {
+    append(game.snake.body, game.walls)
 }
 
 
