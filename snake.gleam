@@ -10,7 +10,7 @@ import gleam/bool.{lazy_guard, negate}
 import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
 import gleam/int.{to_string, random}
-import gleam/list.{append, contains, drop, each, filter, first, index_map, last, length, map, range, reverse, take}
+import gleam/list.{append, contains, drop, each, filter, first, flatten, index_map, last, length, map, prepend, range, reverse, take}
 import gleam/option.{from_result, type Option, Some, None}
 import gleam/string.{repeat}
 
@@ -113,6 +113,13 @@ fn dir_to_int(dir: SnakeDirection) -> Int {
     }
 }
 
+fn point_get_neighbors(point: Point) -> List(Point) {
+    moving_rules
+    |> map(fn(r) {
+        Point(r.x + point.x, r.y + point.y)
+    })
+}
+
 
 //
 //  Snake
@@ -199,12 +206,26 @@ fn snake_pre_draw(snake: Snake) {
     print_at(space, tail.x, tail.y)
 }
 
-fn snake_move(snake: Snake) -> Snake {
+fn snake_get_next_head_pos(snake: Snake) -> Point {
     let assert Some(rule) = dir_to_int(snake.dir)
     |> list_item_at(moving_rules, _)
     let head = snake_get_head(snake)
+    Point(head.x + rule.x, head.y + rule.y)
+}
+
+fn snake_grow_up(game: Game, snake: Snake) -> Snake {
+    let snake = snake_choose_and_set_next_dir(game, snake)
     let body = [
-        Point(head.x + rule.x, head.y + rule.y),
+        snake_get_next_head_pos(snake),
+        ..snake.body
+    ]
+    let snake = Snake(..snake, body:, len: length(body))
+    snake_choose_and_set_next_dir(game, snake) // Important !!!
+}
+
+fn snake_move(snake: Snake) -> Snake {
+    let body = [
+        snake_get_next_head_pos(snake),
         ..take(snake.body, snake.len - 1)
     ]
     Snake(..snake, body:)
@@ -231,8 +252,19 @@ fn snake_has_collisions(game: Game) -> Bool {
 //
 
 fn food_renew(game: Game) -> Game {
-    let food = game_get_forbidden_points(game)
+    let head = snake_get_head(game.snake)
+    let forbidden_points = point_get_neighbors(head)
+    |> map(fn(p) {
+        point_get_neighbors(p)
+        |> prepend(p)
+    })
+    |> flatten()
+    |> prepend(head)
+    |> append(game_get_forbidden_points(game))
+
+    let food = forbidden_points
     |> food_gen_random()
+
     Game(..game, food:)
 }
 
@@ -257,13 +289,13 @@ fn food_draw(game: Game) {
 
 fn walls_init() -> List(Point) {
     [
-        Point(12, 3), Point(14, 3), Point(35, 6),
-        Point(12, 4), Point(14, 4), Point(35, 7),
-        Point(12, 5), Point(14, 5), Point(35, 8),
-        Point(12, 6), Point(14, 6), Point(35, 9),
-        Point(12, 7), Point(14, 7), Point(35, 10),
-        Point(12, 8), Point(14, 8), Point(35, 11),
-        Point(12, 9), Point(14, 9), Point(35, 12),
+        Point(12, 3), Point(14, 3), Point(32, 7),  Point(35, 6),
+        Point(12, 4), Point(14, 4), Point(32, 8),  Point(35, 7),
+        Point(12, 5), Point(14, 5), Point(32, 9),  Point(35, 8),
+        Point(12, 6), Point(14, 6), Point(32, 10), Point(35, 9),
+        Point(12, 7), Point(14, 7), Point(32, 11), Point(35, 10),
+        Point(12, 8), Point(14, 8), Point(32, 12), Point(35, 11),
+        Point(12, 9), Point(14, 9), Point(32, 13), Point(35, 12),
     ]
 }
 
@@ -283,7 +315,7 @@ fn node(point: Point) -> Node {
     Node(point, 0, None)
 }
 
-fn node_get_neighbors(node: Node, game: Game) {
+fn node_get_neighbors(node: Node, game: Game) -> List(Node) {
     let forbidden = game_get_forbidden_points(game)
     moving_rules
     |> map(fn(r) { Point(node.point.x + r.x, node.point.y + r.y) })
@@ -343,6 +375,8 @@ fn node_find_path_worker(
         }
         _ -> {
             game_over()
+            food_draw(game)
+            cursor_move(1, wnd_height)
             panic as "game over"
         }
     }
@@ -393,11 +427,12 @@ fn loop(game: Game) {
     case snake_has_collisions(game) {
         True  -> game_over()
         False -> {
-            sleep(500)
+            sleep(20)
             case snake_get_head(snake) {
                 head if head == game.food -> {
-                    food_renew(game)
-                    |> game_next_tick(snake)
+                    let game = food_renew(game)
+                    let snake = snake_grow_up(game, snake)
+                    Game(..game, snake:)
                     |> loop()
                 }
                 _ -> game_next_tick(game, snake)
