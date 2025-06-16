@@ -69,6 +69,11 @@ pub type Game {
 //  Utils
 //
 
+// Stolen from https://github.com/ollien/gleave
+@external(erlang, "erlang", "halt")
+@external(javascript, "node:process", "exit")
+pub fn exit(status: Int) -> Nil
+
 fn screen_clear() {
     print(ascii_esc <> "[2J" <> ascii_esc <> "[H")
 }
@@ -370,7 +375,8 @@ fn node_find_path_worker(
             game_over()
             food_draw(game)
             cursor_move(1, wnd_height)
-            panic as "game over"
+            exit(0)  // Never returns!
+            []
         }
     }
 }
