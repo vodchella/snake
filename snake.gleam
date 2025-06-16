@@ -10,7 +10,7 @@ import gleam/bool.{lazy_guard, negate}
 import gleam/erlang/process.{sleep}
 import gleam/io.{print, println}
 import gleam/int.{to_string, random}
-import gleam/list.{append, contains, drop, each, filter, first, flatten, index_map, last, length, map, prepend, range, reverse, take}
+import gleam/list.{append, contains, drop, each, filter, first, flatten, last, length, map, prepend, range, reverse, take}
 import gleam/option.{from_result, type Option, Some, None}
 import gleam/string.{repeat}
 
@@ -30,14 +30,13 @@ const brcorner           = "╝"
 const body               = "*"
 const space              = " "
 const initial_length     = 8
-const head_chars         = [ "^",  ">",   "v",  "<" ]
-const moving_dirs        = [ Up,   Right, Down, Left ]
 const moving_rules       = [
-    Point(0, -1),
-    Point(1,  0),
-    Point(0,  1),
-    Point(-1, 0),
+    Point(0, -1),  // Up
+    Point(1,  0),  // Right
+    Point(0,  1),  // Down
+    Point(-1, 0),  // Left
 ]
+
 
 pub type SnakeDirection { Up Right Down Left }
 pub type Point {
@@ -97,22 +96,6 @@ fn borders_draw() {
     println(bottom_row)
 }
 
-fn list_item_at(lst: List(t), i: Int) -> Option(t) {
-    case drop(lst, i) {
-        [val, .._] -> Some(val)
-        []         -> None
-    }
-}
-
-fn dir_to_int(dir: SnakeDirection) -> Int {
-    case dir {
-        Up    -> 0
-        Right -> 1
-        Down  -> 2
-        Left  -> 3
-    }
-}
-
 fn point_get_neighbors(point: Point) -> List(Point) {
     moving_rules
     |> map(fn(r) {
@@ -124,6 +107,34 @@ fn point_get_neighbors(point: Point) -> List(Point) {
 //
 //  Snake
 //
+
+fn snake_rule_to_dir(rule: Point) -> SnakeDirection {
+    case rule {
+        Point(0, -1) -> Up
+        Point(1,  0) -> Right
+        Point(0,  1) -> Down
+        Point(-1, 0) -> Left
+        _ -> panic as "ERROR: invalid rule"
+    }
+}
+
+fn snake_dir_to_rule(dir: SnakeDirection) -> Point {
+    case dir {
+        Up    -> Point(0, -1)
+        Right -> Point(1,  0)
+        Down  -> Point(0,  1)
+        Left  -> Point(-1, 0)
+    }
+}
+
+fn snake_get_head_char(dir: SnakeDirection) -> String {
+    case dir {
+        Up    -> "^"
+        Right -> ">"
+        Down  -> "v"
+        Left  -> "<"
+    }
+}
 
 fn snake_choose_and_set_next_dir(game: Game, snake: Snake) -> Snake {
     let dir = snake_get_next_dir(game, snake)
@@ -142,23 +153,9 @@ fn snake_get_next_dir(game: Game, new_snake: Snake) -> SnakeDirection {
             let rule = case next_node.point {
                 Point(x, y) -> Point(x - head.x, y - head.y)
             }
-
-            let assert Ok(dir_index) = moving_rules
-            |> index_map(fn(p, i) { #(i, p) })
-            |> filter(fn(t) { t.1 == rule })
-            |> map(fn(t) { t.0 })
-            |> first()
-
-            let assert Some(dir) = list_item_at(moving_dirs, dir_index)
-            dir
+            snake_rule_to_dir(rule)
         }
     }
-}
-
-fn snake_get_head_char(dir: SnakeDirection) -> String {
-    let assert Some(head_char) = dir_to_int(dir)
-    |> list_item_at(head_chars, _)
-    head_char
 }
 
 fn snake_init_body(body: List(Point), expected_cnt: Int) -> List(Point) {
@@ -183,20 +180,17 @@ fn snake_get_tail(snake: Snake) -> Point {
 }
 
 fn snake_draw(snake: Snake) {
-    case snake.body {
-        [head, ..rest] -> {
-            rest
-            |> each(fn(p) {
-                print_at(body, p.x, p.y)
-            })
+    let assert [head, ..rest] = snake.body
 
-            snake_get_head_char(snake.dir)
-            |> print_at(head.x, head.y)
+    rest
+    |> each(fn(p) {
+        print_at(body, p.x, p.y)
+    })
 
-            cursor_move(wnd_width - 1, wnd_height - 1)
-        }
-        _ -> panic as "ERROR: snake isn't initialized"
-    }
+    snake_get_head_char(snake.dir)
+    |> print_at(head.x, head.y)
+
+    cursor_move(wnd_width - 1, wnd_height - 1)
 }
 
 fn snake_pre_draw(snake: Snake) {
@@ -207,8 +201,7 @@ fn snake_pre_draw(snake: Snake) {
 }
 
 fn snake_get_next_head_pos(snake: Snake) -> Point {
-    let assert Some(rule) = dir_to_int(snake.dir)
-    |> list_item_at(moving_rules, _)
+    let rule = snake_dir_to_rule(snake.dir)
     let head = snake_get_head(snake)
     Point(head.x + rule.x, head.y + rule.y)
 }
@@ -405,11 +398,6 @@ fn game_over() {
     cursor_move(1, wnd_height)
 }
 
-fn game_next_tick(game: Game, snake: Snake) -> Game {
-    let snake = snake_choose_and_set_next_dir(game, snake)
-    Game(..game, snake:)
-}
-
 fn game_get_forbidden_points(game: Game) -> List(Point) {
     append(game.snake.body, game.walls)
 }
@@ -435,8 +423,11 @@ fn loop(game: Game) {
                     Game(..game, snake:)
                     |> loop()
                 }
-                _ -> game_next_tick(game, snake)
-                     |> loop()
+                _ -> {
+                    let snake = snake_choose_and_set_next_dir(game, snake)
+                    Game(..game, snake:)
+                    |> loop()
+                }
             }
         }
     }
