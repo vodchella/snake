@@ -163,13 +163,17 @@ fn snake_get_next_dir(game: Game, new_snake: Snake) -> SnakeDirection {
     }
 }
 
-fn snake_init_body(body: List(Point), expected_cnt: Int) -> List(Point) {
+fn snake_init_body() -> List(Point) {
+    snake_init_body_worker([], initial_length)
+}
+
+fn snake_init_body_worker(body: List(Point), expected_cnt: Int) -> List(Point) {
     use <- lazy_guard(expected_cnt == 0, fn() { reverse(body) })
     case body {
         []          -> [Point(wnd_width / 2 - 6, wnd_height / 2 - 1)]
         [p, ..rest] -> [Point(p.x, p.y + 1), p, ..rest]
     }
-    |> snake_init_body(expected_cnt - 1)
+    |> snake_init_body_worker(expected_cnt - 1)
 }
 
 fn snake_get_head(snake: Snake) -> Point {
@@ -441,7 +445,7 @@ fn loop(game: Game) {
 
 pub fn main() {
     let walls = walls_init()
-    let snake_body = snake_init_body([], initial_length)
+    let snake_body = snake_init_body()
     let food = Point(13, 7)
     let snake = Snake(Up, snake_body, length(snake_body))
     let game = Game(snake, food, walls)
