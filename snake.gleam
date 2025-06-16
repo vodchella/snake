@@ -376,11 +376,7 @@ fn node_find_path_worker(
             |> node_find_path_worker(src, dst, game, _, explored)
         }
         _ -> {
-            game_over()
-            food_draw(game)
-            cursor_move(1, wnd_height)
-            exit(0)  // Never returns!
-            []
+            game_over(game)
         }
     }
 }
@@ -403,7 +399,15 @@ fn node_build_path(node: Node, acc: List(Node)) -> List(Node) {
 //  Game
 //
 
-fn game_over() {
+fn game_over(game: Game) {
+    game_over_print()
+    food_draw(game)
+    cursor_move(1, wnd_height)
+    exit(0)  // Never returns!
+    []
+}
+
+fn game_over_print() {
     print_at("Game over!", {wnd_width / 2} - 5, wnd_height  / 2)
     cursor_move(1, wnd_height)
 }
@@ -423,7 +427,7 @@ fn loop(game: Game) {
     let snake = snake_move(game.snake)
     snake_draw(snake)
     case snake_has_collisions(game) {
-        True  -> game_over()
+        True  -> game_over_print()
         False -> {
             sleep(20)
             case snake_get_head(snake) {
